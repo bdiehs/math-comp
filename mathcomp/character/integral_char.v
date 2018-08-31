@@ -8,7 +8,7 @@ From mathcomp Require Import commutator cyclic center pgroup sylow gseries.
 From mathcomp Require Import nilpotent abelian ssrnum ssrint polydiv rat.
 From mathcomp Require Import matrix mxalgebra intdiv mxpoly vector falgebra.
 From mathcomp Require Import fieldext separable galois algC cyclotomic algnum.
-From mathcomp Require Import mxrepresentation classfun character.
+From mathcomp Require Import mxrepresentation forms classfun character.
 
 (******************************************************************************)
 (* This file provides some standard results based on integrality properties   *)
