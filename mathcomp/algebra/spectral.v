@@ -11,12 +11,12 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-CoInductive unsplit_spec m n (i : 'I_(m + n)) : 'I_m + 'I_n -> bool -> Type :=
-  | UnsplitLo (j : 'I_m) of i = lshift _ j : unsplit_spec i (inl _ j) true
-  | UnsplitHi (k : 'I_n) of i = rshift _ k : unsplit_spec i (inr _ k) false.
+CoInductive unsplit_spec m n i : 'I_m + 'I_n -> bool -> bool -> Type :=
+  | UnsplitLo j of i = lshift _ j : unsplit_spec i (inl _ j) false true
+  | UnsplitHi k of i = rshift _ k : unsplit_spec i (inr _ k) true false.
 
-Lemma unsplitP m n (i : 'I_(m + n)) : unsplit_spec i (split i) (i < m)%N.
-Proof. by case: splitP=> j eq_j; constructor; apply/val_inj. Qed.
+Lemma unsplitP m n i : unsplit_spec i (@split m n i) (i >= m)%N (i < m)%N.
+Proof. by rewrite leqNgt; case: splitP=> ??; constructor; apply/val_inj. Qed.
 
 Import GRing.Theory Num.Theory.
 Local Open Scope ring_scope.
@@ -41,10 +41,12 @@ by move=> i; apply/sig_eqW/submxP; rewrite (submx_trans (submxMl _ _)) ?genmxE.
 Qed.
 
 Lemma mulmxP (K : fieldType) (m n : nat) (A B : 'M[K]_(m, n)) :
-  reflect (forall u : 'rV__, u *m A = u *m B) (A == B).
-Proof.
-apply: (iffP eqP) => [-> //|eqAB].
-apply: (@row_full_inj _ _ _ _ 1%:M); first by rewrite row_full_unit unitmx1.
+  (forall u : 'rV__, u *m A = u *m B) <-> (A = B).
+Proof. by split=> [eqAB|-> //]; apply/row_matrixP => i; rewrite !rowE eqAB. Qed.
+
+
+ apply: (@row_full_inj _ _ _ _ 1%:M).
+   by rewrite row_full_unit unitmx1.
 by apply/row_matrixP => i; rewrite !row_mul eqAB.
 Qed.
 
@@ -156,7 +158,10 @@ Set Default Proof Using "C".
 Local Notation "M ^ phi" := (map_mx phi M).
 Local Notation "M ^t*" := (map_mx conjC (M ^T)) (at level 30).
 
-Lemma trmxCK m n (M : 'M[C]_(m, n)) : M^t*^t* = M.
+Lemma map_mxCK m n (M : 'M[C]_(m, n)) : (M ^ conjC) ^ conjC = M.
+Proof. by apply/matrixP=> i j; rewrite !mxE conjCK. Qed.
+
+Lemma trmxCK m n (M : 'M[C]_(m, n)) : M ^t* ^t* = M.
 Proof. by apply/matrixP=> i j; rewrite !mxE conjCK. Qed.
 
 Definition unitarymx {m n} := [qualify M : 'M[C]_(m, n) | M *m M ^t* == 1%:M].
@@ -781,6 +786,12 @@ Canonical mxOver_zmodPred S addS kS := ZmodPred (@mxOverNr S addS kS).
 
 End mxOver.
 
+Lemma mxOver_diag (S : pred_class) n (D : 'rV[C]_n) :
+   0 \in S -> D \is a mxOver S -> diag_mx D \is a mxOver S.
+Proof.
+by move=> ??; apply/mxOverP=>??; rewrite mxE; case: eqP; rewrite //(mxOverP _).
+Qed.
+
 Section mxOverRing.
 
 Variables (S : predPredType C) (ringS : subringPred S) (kS : keyed_pred ringS).
@@ -796,6 +807,11 @@ Qed.
 
 End mxOverRing.
 
+Lemma realmxC m n (A : 'M_(m, n)) : A \is a mxOver Num.real -> A ^ conjC = A.
+Proof.
+by move=> ?; apply/matrixP => x y; rewrite mxE (CrealP _) ?(mxOverP _).
+Qed.
+
 Lemma mxOver_scalarmx n (S : predPredType C) c :
   (n > 0)%N -> 0 \in S -> (c%:M \is a @mxOver n n S) = (c \in S).
 Proof.
@@ -807,7 +823,36 @@ Qed.
 Lemma hermitian_normalmx n (A : 'M[C]_n) : A \is hermsymmx -> A \is normalmx.
 Proof.
 move=> Ahermi; apply/normalmxP.
-by rewrite {1 4}[A](is_hermitianmxP _ _ _ Ahermi) !linearZ /= -!scalemxAl.
+by rewrite (trmx_hermitian (HermitianMx Ahermi)) scale1r map_mxCK.
+Qed.
+
+Lemma realsym_hermsym n (A : 'M[C]_n) :
+  A \is symmetricmx -> A \is a mxOver Num.real -> A \is hermsymmx.
+Proof. 
+move=> Asym Areal; apply/is_hermitianmxP.
+by rewrite (trmx_hermitian (HermitianMx Asym))/= !scale1r map_mx_id realmxC.
+Qed.
+
+Lemma symmetric_normalmx n (A : 'M[C]_n) : A \is symmetricmx ->
+  A \is a mxOver Num.real -> A \is normalmx.
+Proof. by move=> Asym Areal; rewrite hermitian_normalmx// realsym_hermsym. Qed.
+
+Lemma hermitian_spectral_diag_real n (A : 'M[C]_n) : A \is hermsymmx ->
+  spectral_diag A \is a mxOver Num.real.
+Proof.
+move=> Ahermi; have /hermitian_normalmx /orthomx_spectralP A_eq := Ahermi.
+have /(congr1 (fun X => X^t*)) := A_eq.
+rewrite inv_unitarymx ?spectral_unitarymx //.
+rewrite !trmx_mul !map_mxM map_trmx trmxK -map_mx_comp.
+rewrite tr_diag_mx map_diag_mx (eq_map_mx _ (@conjCK _)) map_mx_id.
+rewrite -[in RHS]inv_unitarymx ?spectral_unitarymx //.
+have := is_hermitianmxP _ _ _ Ahermi; rewrite expr0 scale1r => <-; rewrite {1}A_eq.
+rewrite mulmxA; move=> /(congr1 (mulmx^~ (invmx (spectralmx A)))).
+rewrite !mulmxK ?spectral_unit //.
+move=> /(congr1 (mulmx (spectralmx A))); rewrite !mulKVmx ?spectral_unit //.
+move=> eq_A_conjA; apply/mxOverP => i j; rewrite ord1 {i}.
+have /matrixP /(_ j j) := eq_A_conjA; rewrite !mxE eqxx !mulr1n.
+by move=> /esym /CrealP.
 Qed.
 
 Lemma real_similar n (A B P : 'M[C]_n) : P \in unitmx ->
@@ -855,24 +900,6 @@ have Immx_rect : {in mxOver Num.real &, forall X Y,
   move=> /= r s X Y Xreal Yreal; apply/matrixP=> i j; rewrite !mxE.
   by rewrite Im_rect // (mxOverP _ _).
 by rewrite !(Remx_rect, Immx_rect) ?mxOverMmx //= => -> ->.
-Qed.
-
-Lemma hermitian_spectral n (A : 'M[C]_n) : A \is hermsymmx ->
-  spectral_diag A \is a mxOver Num.real.
-Proof.
-move=> Ahermi; have /hermitian_normalmx /orthomx_spectralP A_eq := Ahermi.
-have /(congr1 (fun X => X^t*)) := A_eq.
-rewrite inv_unitarymx ?spectral_unitarymx //.
-rewrite !trmx_mul !map_mxM map_trmx trmxK -map_mx_comp.
-rewrite tr_diag_mx map_diag_mx (eq_map_mx _ (@conjCK _)) map_mx_id.
-rewrite -[in RHS]inv_unitarymx ?spectral_unitarymx //.
-have := is_hermitianmxP _ _ _ Ahermi; rewrite expr0 scale1r => <-; rewrite {1}A_eq.
-rewrite mulmxA; move=> /(congr1 (mulmx^~ (invmx (spectralmx A)))).
-rewrite !mulmxK ?spectral_unit //.
-move=> /(congr1 (mulmx (spectralmx A))); rewrite !mulKVmx ?spectral_unit //.
-move=> eq_A_conjA; apply/mxOverP => i j; rewrite ord1 {i}.
-have /matrixP /(_ j j) := eq_A_conjA; rewrite !mxE eqxx !mulr1n.
-by move=> /esym /CrealP.
 Qed.
 
 End Spectral.

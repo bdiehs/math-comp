@@ -183,7 +183,6 @@ Notation bilinear f := (bilinear_for *:%R *:%R f).
 Notation biscalar f := (bilinear_for *%R *%R f).
 Notation bilmorphism_for s s' f := (class_of s s' f).
 Notation bilmorphism f := (bilmorphism_for *:%R *:%R f).
-Coercion class_of_axiom : axiom >-> bilmorphism_for.
 Coercion baser : bilmorphism_for >-> Funclass.
 Coercion apply : map >-> Funclass.
 Notation "{ 'bilinear' fUV | s & s' }" := (map s s' (Phant fUV))
@@ -416,7 +415,7 @@ Notation "{ 'skew_symmetric' U }" := (skew_symmetric_map (Phant U))
 Definition hermitian_sym_map (R : ringType) (U : lmodType R)
   theta (phU : phant U) :=
   Eval simpl in Hermitian.map false theta phU.
-Notation "{ 'hermitian_sym' U 'for' theta }" := (hermitian_sym_map (Phant U))
+Notation "{ 'hermitian_sym' U 'for' theta }" := (hermitian_sym_map theta (Phant U))
   (at level 0, format "{ 'hermitian_sym'  U  'for'  theta }") : ring_scope.
 
 Definition is_skew (R : ringType) (eps : bool) (theta : R -> R)
@@ -493,15 +492,9 @@ Proof. by rewrite orthonormalE => /andP[_]. Qed.
 
 
 End HermitianModuleTheory.
-Arguments orthoP {gT G phi psi}.
-Arguments orthoPl {gT G phi S}.
-Arguments orthoPr {gT G S psi}.
-Arguments orthogonalP {gT G S R}.
-Arguments orthogonal {gT D%g} S1%CF S2%CF.
-Arguments pairwise_orthogonal {gT D%g} S%CF.
-Arguments orthonormal {gT D%g} S%CF.
-Arguments pairwise_orthogonalP {gT G S}.
-Arguments orthonormalP {gT G S}.
+Arguments orthogonal {R eps theta U} form S1 S2.
+Arguments pairwise_orthogonal {R eps theta U} form S.
+Arguments orthonormal {R eps theta U} form S.
 
 Section HermitianIsometry.
 
@@ -519,8 +512,6 @@ Definition isometry tau := forall u v, (form1 (tau u) (tau v))= (form2 u%R v%R).
 Definition isometry_from_to mD tau mR :=
    prop_in2 mD (inPhantom (isometry tau))
   /\ prop_in1 mD (inPhantom (forall u, in_mem (tau u) mR)).
-
-
 
 Notation "{ 'in' D , 'isometry' tau , 'to' R }" :=
     (isometry_from_to (mem D) tau (mem R))
@@ -591,9 +582,6 @@ Proof.
 apply: (iffP subvP); last by move=> H ??; apply/mem_orthovP=> ??; apply: H.
 by move=> /(_ _ _)/mem_orthovP; move=> H ????; apply: H.
 Qed.
-
-
-
 
 Lemma orthov_sym U V : (U _|_ V)%VS = (V _|_ U)%VS.
 Proof. by apply/orthovP/orthovP => eq0 ????; apply/eqP; rewrite herm_eq0C eq0. Qed.
@@ -681,9 +669,6 @@ move/orthogonalP=> oSR; apply/orthogonalP=> xi1 _ Sxi1 /mapP[xi2 Rxi2 ->].
 by rewrite linearNr /= oSR ?oppr0.
 Qed.
 
-
-
-
 Lemma orthogonalE us vs : (orthogonal form us vs) = (<<us>> _|_ <<vs>>)%VS.
 Proof.
 apply/orthogonalP/orthovP => uvsP u v; last first.
@@ -712,6 +697,11 @@ Definition is_orthogonal := [/\ nondegenerate, is_sym form &
 Definition is_unitary := nondegenerate /\ (is_hermsym form).
 
 End HermitianFinVectTheory.
+
+Arguments orthogonalP {F eps theta vT form us vs}.
+Arguments orthovP {F eps theta vT form U V}.
+Arguments mem_orthovPn {F eps theta vT form V u}.
+Arguments mem_orthovP {F eps theta vT form V u}.
 
 Section DotVectTheory.
 
@@ -756,7 +746,6 @@ Lemma dnormB u v : let d := '[u, v] in '[u - v] = '[u] + '[v] - (d + d^*).
 Proof. by rewrite hnormB mul1r. Qed.
 
 End DotVectTheory.
-
 
 Section HermitianTheory.
 
@@ -842,7 +831,6 @@ Qed.
 
 End HermitianTheory.
 
-
 Section DotFinVectTheory.
 
 Variables (C : numClosedFieldType).
@@ -850,7 +838,6 @@ Variable (U : vectType C) (form : {dot U for conjC}).
 
 Local Notation "''[' u , v ]" := (form u%R v%R) : ring_scope.
 Local Notation "''[' u ]" := '[u, u]%R : ring_scope.
-
 
 Lemma sub_pairwise_orthogonal S1 S2 :
     {subset S1 <= S2} ->  uniq S1 ->
@@ -860,8 +847,6 @@ move=> sS12 uniqS1 /pairwise_orthogonalP[/andP[notS2_0 _] oS2].
 apply/pairwise_orthogonalP; rewrite /= (contra (sS12 0)) //.
 by split=> //; apply: sub_in2 oS2.
 Qed.
-
-
 
 Lemma orthogonal_free S : pairwise_orthogonal form S -> free  S.
 Proof.
@@ -1015,8 +1000,11 @@ Qed.
 
 End DotFinVectTheory.
 
-
-
+Arguments orthoP {C U form phi psi}.
+Arguments pairwise_orthogonalP {C U form S}.
+Arguments orthonormalP {C U form S}.
+Arguments orthoPl {C U form phi S}.
+Arguments orthoPr {C U form S psi}.
 
 Local Notation "u '``_' i" := (u (GRing.zero (Zp_zmodType O)) i) : ring_scope.
 Local Notation "''e_' i" := (delta_mx 0 i)
@@ -1068,8 +1056,8 @@ apply: eq_bigr => i _ /=; rewrite linearZ !linearZ /= !linear_suml; congr (_ * _
 apply: eq_bigr => j _ /=; rewrite linearZ !linearZl_LR; congr (_ * _).
 rewrite -!(nth_map 0 0 tau) ?{}defT //; have [-> | neq_ji] := eqVneq j i.
   by rewrite /=  -[RHS](nth_map 0 0 normf1) -?[LHS](nth_map 0 0 normf2) ?eq_sz // eq_nST.
-have{oS} [/=/andP[_ uS] oS] := pairwise_orthogonalP _ _ oS.
-have{oT} [/=/andP[_ uT] oT] := pairwise_orthogonalP _ _ oT.
+have{oS} [/=/andP[_ uS] oS] := pairwise_orthogonalP oS.
+have{oT} [/=/andP[_ uT] oT] := pairwise_orthogonalP oT.
 by rewrite oS ?oT ?mem_nth ?nth_uniq ?eq_sz.
 Qed.
 
@@ -1090,15 +1078,14 @@ by rewrite !linearZ /= !linearZl_LR !Dtau //= If.
 Qed.
 
 
-(* Lemma isometry_raddf_inj  (tau : {additive U1 -> U2}) : *)
-(*     {in U1 &, isometry form2 form1 tau} -> *)
-(*       {in U1 &, forall u v, u - v \in U1} -> *)
-(*      ->{in U1 &, injective tau}. *)
-(* Proof. *)
-(* move=> Itau linU phi psi Uphi Upsi /eqP; rewrite -subr_eq0 -raddfB. *)
-(* by rewrite -(dnorm_eq0 form2)  Itau ?linU // dnorm_eq0 subr_eq0 => /eqP. *)
-(* Qed. *)
-
+Lemma isometry_raddf_inj  (tau : {additive U1 -> U2}) :
+    {in U1 &, isometry form2 form1 tau} ->
+    {in U1 &, forall u v, u - v \in U1} ->
+  {in U1 &, injective tau}.
+Proof.
+move=> Itau linU phi psi Uphi Upsi /eqP; rewrite -subr_eq0 -raddfB.
+by rewrite -(dnorm_eq0 form2)  Itau ?linU // dnorm_eq0 subr_eq0 => /eqP.
+Qed.
 
 
 End BuildIsometries.
