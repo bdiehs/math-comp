@@ -1,0 +1,17 @@
+OUTPUT_TESTS=test_suite/output.v
+
+OUTPUT_ARTIFACTS=$(OUTPUT_TESTS:%.v=%.v.out.new)
+
+post-all:: $(OUTPUT_ARTIFACTS)
+	@for f in $(OUTPUT_TESTS); do\
+	  diff -u $$f.out $$f.out.new > /dev/null;\
+	  if [ $$? -ne 0 ]; \
+	    then echo "Output of file $$f differs!";\
+		diff -u $$f.out $$f.out.new;\
+		exit 1;\
+	  fi;\
+	done
+
+$(OUTPUT_ARTIFACTS): %.v.out.new: %.v all/all.vo
+	$(COQC) $(COQFLAGS) $(COQLIBS) $< > $<.out.new
+	
