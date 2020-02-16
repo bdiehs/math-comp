@@ -1,7 +1,7 @@
 From mathcomp
 Require Import ssreflect ssrfun ssrbool eqtype ssrnat seq div choice fintype.
 From mathcomp
-Require Import tuple bigop ssralg finset fingroup zmodp poly ssrnum.
+Require Import tuple bigop ssralg finset fingroup zmodp poly order ssrnum.
 From mathcomp
 Require Import matrix mxalgebra vector.
 
@@ -10,7 +10,7 @@ Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
 Local Open Scope ring_scope.
-Import GRing.Theory Num.Theory.
+Import GRing.Theory Order.Theory Num.Theory.
 
 Reserved Notation "'[ u , v ]"
   (at level 2, format "'[hv' ''[' u , '/ '  v ] ']'").
@@ -716,7 +716,7 @@ Proof. by case: form => [?[?]] /=; apply. Qed.
 
 Lemma dnorm_geiff0 u : 0 <= '[u] ?= iff (u == 0).
 Proof.
-by apply/lerifP; have [->|uN0] := altP eqP; rewrite ?linear0 ?neq0_dnorm_gt0.
+by apply/leifP; have [->|uN0] := altP eqP; rewrite ?linear0 ?neq0_dnorm_gt0.
 Qed.
 
 Lemma dnorm_ge0 u : 0 <= '[u]. Proof. by rewrite dnorm_geiff0. Qed.
@@ -725,7 +725,7 @@ Lemma dnorm_eq0 u : ('[u] == 0) = (u == 0).
 Proof. by rewrite -dnorm_geiff0 eq_sym. Qed.
 
 Lemma dnorm_gt0 u : (0 < '[u]) = (u != 0).
-Proof. by rewrite ltr_def dnorm_eq0 dnorm_ge0 andbT. Qed.
+Proof. by rewrite lt_def dnorm_eq0 dnorm_ge0 andbT. Qed.
 
 Lemma sqrt_dnorm_ge0 u : 0 <= sqrtC '[u].
 Proof. by rewrite sqrtC_ge0 dnorm_ge0. Qed.
@@ -876,7 +876,7 @@ Theorem CauchySchwarz (u v : U) :
 Proof.
 rewrite free_cons span_seq1 seq1_free -negb_or negbK orbC.
 have [-> | nz_v] /= := altP (v =P 0).
-  by apply/lerifP; rewrite /= !linear0 normCK mul0r mulr0.
+  by apply/leifP; rewrite /= !linear0 normCK mul0r mulr0.
 without loss ou: u / '[u, v] = 0.
   move=> IHo; pose a := '[u, v] / '[v]; pose u1 := u - a *: v.
   have ou: '[u1, v] = 0.
@@ -884,7 +884,7 @@ without loss ou: u / '[u, v] = 0.
   rewrite (canRL (subrK _) (erefl u1)) rpredDr ?rpredZ ?memv_line //.
   rewrite linearDl /= ou add0r linearZl_LR /= normrM (ger0_norm (dnorm_ge0 _ _)).
   rewrite exprMn mulrA -dnormZ hnormDd/=; last by rewrite linearZ/= ou mulr0.
-  by have:= IHo _ ou; rewrite mulrDl -lerif_subLR subrr ou normCK mul0r.
+  by have:= IHo _ ou; rewrite mulrDl -leif_subLR subrr ou normCK mul0r.
 rewrite ou normCK mul0r; split; first by rewrite mulr_ge0 ?dnorm_ge0.
 rewrite eq_sym mulf_eq0 orbC dnorm_eq0 (negPf nz_v) /=.
 apply/idP/idP=> [|/vlineP[a {2}->]]; last by rewrite linearZ/= ou mulr0.
@@ -895,7 +895,7 @@ Lemma CauchySchwarz_sqrt u v :
   `|'[u, v]| <= sqrtC '[u] * sqrtC '[v] ?= iff ~~ free [:: u; v].
 Proof.
 rewrite -(sqrCK (normr_ge0 _)) -sqrtCM ?qualifE ?dnorm_ge0 //.
-rewrite (mono_in_lerif (@ler_sqrtC _)) 1?rpredM ?qualifE;
+rewrite (mono_in_leif (@ler_sqrtC _)) 1?rpredM ?qualifE;
 by rewrite ?normr_ge0 ?dnorm_ge0 //; apply: CauchySchwarz.
 Qed.
 
@@ -941,7 +941,7 @@ Qed.
 
 Lemma eq_orthonormal S0 S : perm_eq S0 S -> orthonormal form S0 = orthonormal form S.
 Proof.
-move=> eqRS; rewrite !orthonormalE (eq_all_r (perm_eq_mem eqRS)).
+move=> eqRS; rewrite !orthonormalE (eq_all_r (perm_mem eqRS)).
 by rewrite (eq_pairwise_orthogonal eqRS).
 Qed.
 
@@ -954,11 +954,11 @@ Lemma triangle_lerif u v :
   sqrtC '[u + v] <= sqrtC '[u] + sqrtC '[v]
            ?= iff ~~ free [:: u; v] && (0 <= coord [tuple v] 0 u).
 Proof.
-rewrite -(mono_in_lerif ler_sqr) ?rpredD ?qualifE ?sqrtC_ge0 ?dnorm_ge0 //.
-rewrite andbC sqrrD !sqrtCK addrAC dnormD (mono_lerif (ler_add2l _))/=.
+rewrite -(mono_in_leif ler_sqr) ?rpredD ?qualifE ?sqrtC_ge0 ?dnorm_ge0 //.
+rewrite andbC sqrrD !sqrtCK addrAC dnormD (mono_leif (ler_add2l _))/=.
 rewrite -mulr_natr -[_ + _](divfK (negbT (pnatr_eq0 C 2))) -/('Re _).
-rewrite (mono_lerif (ler_pmul2r _)) ?ltr0n //.
-have:= lerif_trans (lerif_Re_Creal '[u, v]) (CauchySchwarz_sqrt u v).
+rewrite (mono_leif (ler_pmul2r _)) ?ltr0n //.
+have:= leif_trans (leif_Re_Creal '[u, v]) (CauchySchwarz_sqrt u v).
 congr (_ <= _ ?= iff _); apply: andb_id2r.
 rewrite free_cons span_seq1 seq1_free -negb_or negbK orbC.
 have [-> | nz_v] := altP (v =P 0); first by rewrite linear0 coord0.

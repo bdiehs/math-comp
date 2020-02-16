@@ -950,7 +950,7 @@ Implicit Types (phi psi xi : 'CF(L)) (R S : seq 'CF(L)).
 Implicit Types (U : pred 'CF(L)) (W : pred 'CF(G)).
 
 Notation pairwise_orthogonal := (pairwise_orthogonal [hermitian of @cfdot _ _]).
-Notation pairwise_orthogonalP := (pairwise_orthogonalP [dot of @cfdot _ _]).
+Notation pairwise_orthogonalP := (@pairwise_orthogonalP _ _ [dot of @cfdot _ _]).
 
 
 Lemma sub_iso_to U1 U2 W1 W2 tau :
@@ -968,15 +968,11 @@ move=> Itau linU phi psi Uphi Upsi /eqP; rewrite -subr_eq0 -raddfB.
 by rewrite -cfnorm_eq0 Itau ?linU // cfnorm_eq0 subr_eq0 => /eqP.
 Qed.
 
-
-
-
-
 Lemma sub_pairwise_orthogonal S1 S2 :
     {subset S1 <= S2} ->  uniq S1 ->
   pairwise_orthogonal S2 -> pairwise_orthogonal S1.
 Proof.
-move=> sS12 uniqS1 /pairwise_orthogonalP[/andP[notS2_0 _] oS2].
+move=> sS12 uniqS1 /pairwise_orthogonalP [/andP[notS2_0 _] oS2].
 apply/pairwise_orthogonalP; rewrite /= (contra (sS12 0)) //.
 by split=> //; apply: sub_in2 oS2.
 Qed.
@@ -2143,8 +2139,3 @@ Definition conj_cfQuo := cfAutQuo conjC.
 Definition conj_cfMod := cfAutMod conjC.
 Definition conj_cfInd := cfAutInd conjC.
 Definition cfconjC_eq1 := cfAut_eq1 conjC.
-
-Notation "@ 'cf_triangle_lerif'" :=
-  (deprecate cf_triangle_lerif cf_triangle_leif)
-  (at level 10, only parsing).
-Notation cf_triangle_lerif := (@cf_triangle_lerif _ _) (only parsing).

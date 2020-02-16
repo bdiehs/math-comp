@@ -295,7 +295,7 @@ Let freeS := orthogonal_free oSS.
 Let uniqS : uniq S := free_uniq freeS.
 Let Z_S : {subset S <= 'Z[S]}. Proof. by move=> phi; apply: mem_zchar. Qed.
 Let notS0 : 0 \notin S. Proof. by case/andP: oSS. Qed.
-Let dotSS := proj2 (pairwise_orthogonalP [dot of @cfdot _ _ ] S oSS).
+Let dotSS := proj2 (@pairwise_orthogonalP _ _ [dot of @cfdot _ _ ] S oSS).
 
 Lemma map_pairwise_orthogonal : pairwise_orthogonal [hermitian of @cfdot _ _ ] (map nu S).
 Proof.
@@ -416,7 +416,7 @@ Lemma vchar_orthonormalP S :
            perm_eq S [seq (-1) ^+ b i *: 'chi_i | i in I])
           (orthonormal S).
 Proof.
-move=> vcS; apply: (equivP (orthonormalP _ _)).
+move=> vcS; apply: (equivP orthonormalP).
 split=> [[uniqS oSS] | [I [b defS]]]; last first.
   split=> [|xi1 xi2]; rewrite ?(perm_mem defS).
     rewrite (perm_uniq defS) map_inj_uniq ?enum_uniq // => i j /eqP.
@@ -895,7 +895,7 @@ Lemma of_irrK (phi: 'CF(G)) :
   {in dirr_constt phi, cancel (@of_irr G) (to_dirr phi)}.
 Proof.
 case=> b i; rewrite dirr_consttE linearZ /= rmorph_sign /= /to_dirr mulr_sign.
-by rewrite fun_if oppr_gt0; case: b => [|/ltrW/le_gtF] ->.
+by rewrite fun_if oppr_gt0; case: b => [|/ltW/le_gtF] ->.
 Qed.
 
 Lemma cfdot_todirrE (phi: 'CF(G)) i (phi_i := dchi (to_dirr phi i)) :

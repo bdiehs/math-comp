@@ -1,9 +1,7 @@
-From mathcomp
-Require Import ssreflect ssrfun ssrbool eqtype ssrnat seq div choice fintype.
-From mathcomp
-Require Import bigop ssralg finset fingroup zmodp poly polydiv ssrnum.
-From mathcomp
-Require Import matrix mxalgebra vector mxpoly.
+From mathcomp Require Import ssreflect ssrfun ssrbool eqtype choice ssrnat.
+From mathcomp Require Import seq div fintype bigop ssralg finset fingroup zmodp.
+From mathcomp Require Import poly polydiv order ssrnum matrix mxalgebra vector.
+From mathcomp Require Import mxpoly.
 
 Require Import forms.
 
@@ -18,7 +16,7 @@ CoInductive unsplit_spec m n i : 'I_m + 'I_n -> bool -> bool -> Type :=
 Lemma unsplitP m n i : unsplit_spec i (@split m n i) (i >= m)%N (i < m)%N.
 Proof. by rewrite leqNgt; case: splitP=> ??; constructor; apply/val_inj. Qed.
 
-Import GRing.Theory Num.Theory.
+Import GRing.Theory Order.Theory Num.Theory.
 Local Open Scope ring_scope.
 
 Local Notation stable V f := (V%MS *m f%R <= V%MS)%MS.
@@ -43,12 +41,6 @@ Qed.
 Lemma mulmxP (K : fieldType) (m n : nat) (A B : 'M[K]_(m, n)) :
   (forall u : 'rV__, u *m A = u *m B) <-> (A = B).
 Proof. by split=> [eqAB|-> //]; apply/row_matrixP => i; rewrite !rowE eqAB. Qed.
-
-
- apply: (@row_full_inj _ _ _ _ 1%:M).
-   by rewrite row_full_unit unitmx1.
-by apply/row_matrixP => i; rewrite !row_mul eqAB.
-Qed.
 
 Section Restriction.
 
@@ -400,12 +392,12 @@ have [v /and4P [vBn v_neq0 dAv_ge0 dAsub]] :
       by rewrite mxrank_unitary // -addn1.
     rewrite orthomx_sym in vBn.
     exists v; rewrite vBn v_neq0 -pBE.
-      rewrite ['[_, _]](hermmx_eq0P _ _) ?lerr //=.
+      rewrite ['[_, _]](hermmx_eq0P _ _) ?lexx //=.
       rewrite (submx_trans (proj_ortho_sub _ _)) //.
       by rewrite -{1}[B]addr0 addmx_sub_adds ?sub0mx.
     by rewrite (submx_trans _ vBn) // proj_ortho_sub.
   pose c := (sqrtC '[BoSn])^-1; have c_gt0 : c > 0.
-    by rewrite invr_gt0 sqrtC_gt0 ltr_def ?dnorm_eq0 ?dnorm_ge0 BoSn_neq0.
+    by rewrite invr_gt0 sqrtC_gt0 lt_def ?dnorm_eq0 ?dnorm_ge0 BoSn_neq0.
   exists BoSn; apply/and4P; split => //.
   - by rewrite orthomx_sym ?proj_ortho_sub // /gtr_eqF.
   - rewrite -pBE linearDl // [X in X + '[_]](hermmx_eq0P _ _) ?add0r ?dnorm_ge0 //.
@@ -414,7 +406,7 @@ have [v /and4P [vBn v_neq0 dAv_ge0 dAsub]] :
 wlog nv_eq1 : v vBn v_neq0 dAv_ge0 dAsub / '[v] = 1.
   pose c := (sqrtC '[v])^-1.
   have c_gt0 : c > 0 by rewrite invr_gt0 sqrtC_gt0 ?dnorm_gt0.
-  have [c_ge0 c_eq0F] := (ltrW c_gt0, gtr_eqF c_gt0).
+  have [c_ge0 c_eq0F] := (ltW c_gt0, gt_eqF c_gt0).
   move=> /(_ (c *: v)); apply.
   - by rewrite orthomxZ ?c_eq0F.
   - by rewrite scaler_eq0 c_eq0F.
@@ -740,17 +732,17 @@ Qed.
 Section mxOver.
 Context {m n : nat}.
 
-Definition mxOver (S : pred_class) :=
+Definition mxOver (S : {pred C}) :=
   [qualify a M : 'M[C]_(m, n) | [forall i, [forall j, M i j \in S]]].
 
 Fact mxOver_key S : pred_key (mxOver S). Proof. by []. Qed.
 Canonical mxOver_keyed S := KeyedQualifier (mxOver_key S).
 
-Lemma mxOverP {S : pred_class} {M : 'M[C]__} :
+Lemma mxOverP {S : {pred C}} {M : 'M[C]__} :
   reflect (forall i j, M i j \in S) (M \is a mxOver S).
 Proof. exact/'forall_forallP. Qed.
 
-Lemma mxOverS (S1 S2 : pred_class) :
+Lemma mxOverS (S1 S2 : {pred C}) :
   {subset S1 <= S2} -> {subset mxOver S1 <= mxOver S2}.
 Proof. by move=> sS12 M /mxOverP S1M; apply/mxOverP=> i j; apply/sS12/S1M. Qed.
 
@@ -786,7 +778,7 @@ Canonical mxOver_zmodPred S addS kS := ZmodPred (@mxOverNr S addS kS).
 
 End mxOver.
 
-Lemma mxOver_diag (S : pred_class) n (D : 'rV[C]_n) :
+Lemma mxOver_diag (S : {pred C}) n (D : 'rV[C]_n) :
    0 \in S -> D \is a mxOver S -> diag_mx D \is a mxOver S.
 Proof.
 by move=> ??; apply/mxOverP=>??; rewrite mxE; case: eqP; rewrite //(mxOverP _).
