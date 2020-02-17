@@ -776,6 +776,17 @@ Proof. by move=> M /mxOverP SM; apply/mxOverP=> i j; rewrite mxE rpredN. Qed.
 Canonical mxOver_opprPred S addS kS := OpprPred (@mxOverNr S addS kS).
 Canonical mxOver_zmodPred S addS kS := ZmodPred (@mxOverNr S addS kS).
 
+Section mxOverScale.
+
+Lemma mxOverZ S (mulS : mulrPred S) (kS : keyed_pred mulS) :
+  {in kS & mxOver kS, forall a : C, forall v : 'M[C]_(m, n),
+        a *: v \is a mxOver kS}.
+Proof.
+by move=> a v aS /mxOverP vS; apply/mxOverP => i j; rewrite !mxE rpredM.
+Qed.
+
+End mxOverScale.
+
 End mxOver.
 
 Lemma mxOver_diag (S : {pred C}) n (D : 'rV[C]_n) :
@@ -818,19 +829,21 @@ move=> Ahermi; apply/normalmxP.
 by rewrite (trmx_hermitian (HermitianMx Ahermi)) scale1r map_mxCK.
 Qed.
 
+Notation realmx := (mxOver Num.real).
+
 Lemma realsym_hermsym n (A : 'M[C]_n) :
-  A \is symmetricmx -> A \is a mxOver Num.real -> A \is hermsymmx.
+  A \is symmetricmx -> A \is a realmx -> A \is hermsymmx.
 Proof. 
 move=> Asym Areal; apply/is_hermitianmxP.
 by rewrite (trmx_hermitian (HermitianMx Asym))/= !scale1r map_mx_id realmxC.
 Qed.
 
 Lemma symmetric_normalmx n (A : 'M[C]_n) : A \is symmetricmx ->
-  A \is a mxOver Num.real -> A \is normalmx.
+  A \is a realmx -> A \is normalmx.
 Proof. by move=> Asym Areal; rewrite hermitian_normalmx// realsym_hermsym. Qed.
 
 Lemma hermitian_spectral_diag_real n (A : 'M[C]_n) : A \is hermsymmx ->
-  spectral_diag A \is a mxOver Num.real.
+  spectral_diag A \is a realmx.
 Proof.
 move=> Ahermi; have /hermitian_normalmx /orthomx_spectralP A_eq := Ahermi.
 have /(congr1 (fun X => X^t*)) := A_eq.
@@ -847,51 +860,73 @@ have /matrixP /(_ j j) := eq_A_conjA; rewrite !mxE eqxx !mulr1n.
 by move=> /esym /CrealP.
 Qed.
 
-Lemma real_similar n (A B P : 'M[C]_n) : P \in unitmx ->
-  invmx P *m A *m P = B ->
-  A \is a mxOver Num.real -> B \is a mxOver Num.real ->
-  let Q a := P ^ (@Re _) + a *: P ^ (@Im _) in
-  exists2 a, (a \is Num.real) && (Q a \in unitmx) &
-  invmx (Q a) *m A *m Q a = B.
+Lemma Remx_rect m n :
+  {in realmx &, forall (X Y : 'M_(m,n)), (X + 'i *: Y) ^ (@Re _) = X}.
 Proof.
-move=> Punit /(congr1 (mulmx P)); rewrite !mulmxA mulmxV ?mul1mx //.
-set Pr := P ^ (@Re _); set Pi := P ^ (@Im _); move: Punit.
-have -> : P = Pr + 'i *: Pi by apply/matrixP=> i j; rewrite !mxE -Crect.
-have Pr_real : Pr \is a mxOver Num.real.
-  by apply/mxOverP=> i j; rewrite !mxE Creal_Re.
-have Pi_real : Pi \is a mxOver Num.real.
-  by apply/mxOverP=> i j; rewrite !mxE Creal_Im.
-move: Pr Pi Pr_real Pi_real => Pr Pi Pr_real Pi_real Punit eq_AP_PB Areal Breal.
+move=> X Y Xreal Yreal; apply/matrixP=> i j; rewrite !mxE.
+by rewrite Re_rect // (mxOverP _ _).
+Qed.
+
+Lemma Immx_rect m n :
+  {in realmx &, forall (X Y : 'M_(m,n)), (X + 'i *: Y) ^ (@Im _) = Y}.
+Proof.
+move=> /= X Y Xreal Yreal; apply/matrixP=> i j; rewrite !mxE.
+by rewrite Im_rect // (mxOverP _ _).
+Qed.
+
+Lemma eqmx_ReiIm m n (X Y X' Y' : 'M[C]_(m,n)) :
+    X \is a realmx -> Y \is a realmx ->
+    X' \is a realmx -> Y' \is a realmx ->
+  (X + 'i *: Y) = (X' + 'i *: Y') -> (X, Y) = (X', Y').
+Proof.
+move=> XRe YRe X'Im Y'Im eqXY.
+have /(congr1 (fun X => X ^ (@Im _))) := eqXY.
+have /(congr1 (fun X => X ^ (@Re _))) := eqXY.
+by rewrite !Remx_rect// !Immx_rect// => -> ->.
+Qed.
+
+Definition similar_in n (D : {pred 'M[C]_n}) (A B : 'M[C]_n) :=
+  exists2 P, (P \in D) && (P \in unitmx) & A *m P = P *m B.
+
+Lemma similar_in_eq n (D : {pred 'M[C]_n}) (A B : 'M[C]_n) :
+  similar_in D A B <->
+  exists2 P, (P \in D) && (P \in unitmx) & invmx P *m A *m P = B.
+Proof.
+have QLR R (Ru : R \in unitmx) : (invmx R *m A *m R == B) = (A *m R == R *m B).
+  move: (Ru); rewrite -row_full_unit => /row_full_inj/inj_eq<-.
+  by rewrite mulmxA mulKVmx.
+split=> - [x /andP[xD x_unit]] /eqP eqAxxB; exists x; rewrite ?xD//;
+by apply/eqP; move: eqAxxB; rewrite QLR.
+Qed. 
+
+Lemma real_similar n (A B : 'M[C]_n) :
+  similar_in predT A B ->
+  A \is a realmx -> B \is a realmx ->
+  similar_in realmx A B.
+Proof.
+case=> [P /andP[_]]; pose Pr := P ^ (@Re _); pose Pi := P ^ (@Im _).
+have Pr_real : Pr \is a realmx by apply/mxOverP=> i j; rewrite !mxE Creal_Re.
+have Pi_real : Pi \is a realmx by apply/mxOverP=> i j; rewrite !mxE Creal_Im.
+pose Q x := P ^ (@Re _) + x *: P ^ (@Im _).
+have -> : P = Q 'i by apply/matrixP=> i j; rewrite !mxE -Crect.
+move=> Qi_unit eq_AP_PB Areal Breal.
 pose p := \det (Pr ^ polyC + 'X *: Pi ^ polyC).
+have horner_evaliC x : horner_eval (x : C) \o polyC =1 id := fun=> hornerC _ _.
+have Qunit x : Q x \in unitmx = (p.[x] != 0).
+  rewrite /p -horner_evalE -det_map_mx map_mxD map_mxZ/= horner_evalE hornerX.
+  by rewrite -![(_ ^ polyC) ^ _]map_mx_comp !eq_map_mx_id// unitmxE unitfE.
 have p_neq0 : p != 0.
-  move: Punit; rewrite unitmxE unitfE /p; apply: contraNneq.
-  move=> /(congr1 (horner^~ 'i)); rewrite -/(horner_eval _ _) -det_map_mx.
-  rewrite map_mxD map_mxZ -!map_mx_comp !(eq_map_mx _ (fun=> hornerC _ _)).
-  by rewrite !map_mx_id /= /horner_eval hornerX horner0 => ->.
-have rs_uniq : uniq [seq (i%:R : C) | i <- iota 0 (size p)].
-  by rewrite map_inj_uniq ?iota_uniq //; apply: mulrIn; rewrite oner_eq0.
-have := contraNN (fun x => max_poly_roots p_neq0 x rs_uniq).
-rewrite size_map size_iota ltnn => /(_ isT) /allPn[a a_in rootNpa].
-have a_real : a \is Num.real by move: a_in => /mapP [i _ ->]; rewrite realn.
-move=> [: Pa_unit]; exists a.
-   rewrite a_real /=; abstract: Pa_unit.
-   move: rootNpa; rewrite unitmxE unitfE /root /p -/(horner_eval _ _).
-   rewrite -det_map_mx map_mxD map_mxZ -!map_mx_comp.
-   rewrite !(eq_map_mx _ (fun=> hornerC _ _)).
-   by rewrite !map_mx_id /= /horner_eval hornerX.
-apply: (can_inj (mulKmx Pa_unit)); rewrite !mulmxA mulmxV // mul1mx.
-rewrite !mulmxDl !mulmxDr -!scalemxAr -!scalemxAl in eq_AP_PB *.
-have /(congr1 (fun X => X ^ (@Im _))) := eq_AP_PB.
-have /(congr1 (fun X => X ^ (@Re _))) := eq_AP_PB.
-have Remx_rect : {in mxOver Num.real &, forall X Y,
-                      (X + 'i *: Y) ^ (@Re _) = X}.
-  move=> /= r s X Y Xreal Yreal; apply/matrixP=> i j; rewrite !mxE.
-  by rewrite Re_rect // (mxOverP _ _).
-have Immx_rect : {in mxOver Num.real &, forall X Y,
-                      (X + 'i *: Y) ^ (@Im _) = Y}.
-  move=> /= r s X Y Xreal Yreal; apply/matrixP=> i j; rewrite !mxE.
-  by rewrite Im_rect // (mxOverP _ _).
-by rewrite !(Remx_rect, Immx_rect) ?mxOverMmx //= => -> ->.
+  by move: Qi_unit; rewrite Qunit; apply: contra_neq => ->; rewrite hornerE.
+have [a a_real rootNa] : exists2 a, a \is Num.real &  ~~ root p a.
+  have rs_uniq : uniq [seq (i%:R : C) | i <- iota 0 (size p)].
+    by rewrite map_inj_uniq ?iota_uniq //; apply: mulrIn; rewrite oner_eq0.
+  have := contraNN (fun x => max_poly_roots p_neq0 x rs_uniq).
+  rewrite size_map size_iota ltnn => /(_ isT) /allPn[a a_in rootNpa].
+  by exists a => //; by move: a_in => /mapP [i _ ->]; rewrite realn.
+exists (Q a); first by rewrite Qunit rootNa rpredD// mxOverZ//.
+apply/eqP; have /eqP := eq_AP_PB.
+rewrite !mulmxDl !mulmxDr -!scalemxAr -!scalemxAl => /eqP/eqmx_ReiIm.
+by rewrite !mxOverMmx// => /(_ isT isT isT isT) [-> ->].
 Qed.
 
 End Spectral.
