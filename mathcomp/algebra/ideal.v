@@ -1,5 +1,5 @@
 From mathcomp Require Import ssreflect eqtype choice bigop ssreflect ssrbool ssrnat.
-From mathcomp Require Import ssrfun seq ssralg generic_quotient ring_quotient.
+From mathcomp Require Import ssrfun fintype seq ssralg generic_quotient ring_quotient.
 
 Import GRing.Theory.
 
@@ -211,10 +211,13 @@ Section IdealGen.
 
 Variables (R : comRingType) (Λ : Type) (a_λ : Λ -> R).
 
-Definition gen_ideal (I : {pred R}) := forall r,
-    r \in I <-> exists lxs : seq (Λ * R), r = \sum_(i <- lxs) (i.2 * a_λ i.1).
+Definition gen_ideal_pred r := exists lxs : seq (Λ * R),
+    r = \sum_(i <- lxs) (i.2 * a_λ i.1).
 
-Lemma gen_ideal_addr I : gen_ideal I -> addrPred I.
+Definition gen_ideal_def (I : {pred R}) := forall r,
+    r \in I <-> gen_ideal_pred r.
+
+Lemma gen_ideal_addr I : gen_ideal_def I -> addrPred I.
 Proof.
   move=> genI; split; first by [].
   split; first by apply/genI; exists nil; rewrite big_nil.
@@ -222,7 +225,7 @@ Proof.
   by exists (x_gen ++ y_gen); rewrite big_cat.
 Qed.
   
-Lemma gen_ideal_zmod I : gen_ideal I -> zmodPred I.
+Lemma gen_ideal_zmod I : gen_ideal_def I -> zmodPred I.
 Proof.
   move=> genI; split; first by exact: gen_ideal_addr.
   move=> x /genI [x_gen ->]; apply/genI; exists [seq (p.1, -p.2) | p <- x_gen].
@@ -231,14 +234,14 @@ Proof.
   by move=> a b; rewrite -{1}[b]opprK opprB addrC.
 Qed.
 
-Lemma gen_ideal_idealr I : gen_ideal I -> idealr I.
+Lemma gen_ideal_idealr I : gen_ideal_def I -> idealr I.
 Proof.
   move=> genI; split; first by exact: gen_ideal_zmod.
   move=> r x /genI [x_gen ->]; apply/genI; exists [seq (p.1, r * p.2) | p <- x_gen].
   by rewrite big_distrr big_map; apply: eq_bigr => i _ /=; rewrite mulrA.
 Qed.
 
-Variables (I : {pred R}) (genI : gen_ideal I)
+Variables (I : {pred R}) (genI : gen_ideal_def I)
           (kI : keyed_pred (gen_ideal_idealr genI)).
 
 Lemma gen_ideal_contains : forall λ, a_λ λ \in kI.
@@ -257,4 +260,92 @@ Proof.
 Qed.
     
 End IdealGen.
+
+Section PrincipalIdeal.
+  
+Variables (R : comRingType) (a : R).
+
+Definition principal_idealr_pred r := (exists x, r = x * a).
+Definition principal_idealr_def (I: {pred R}) := forall r,
+  r \in I <-> principal_idealr_pred r.
+
+Definition Λ := 'I_1.
+Definition a_λ : Λ -> R := fun _ => a.
+
+Definition principal_idealr (I : {pred R}) := gen_ideal_def a_λ I.
+
+
+Lemma idealr_principal_gen r : principal_idealr_pred r -> gen_ideal_pred a_λ r.
+Proof.
+  have H0_leq_1 : (0 < 1) by []; move=> [x ->].
+  by exists [:: (Ordinal H0_leq_1, x)]; rewrite big_cons big_nil addr0.
+Qed.
+
+Lemma idealr_gen_principal r : gen_ideal_pred a_λ r -> principal_idealr_pred r.
+Proof.
+  move=> [r_gen ->]; exists (\sum_(i <- r_gen) i.2).
+  by rewrite big_distrl; apply: eq_bigr.
+Qed.
+  
+Lemma idealr_principal_def I : principal_idealr I -> principal_idealr_def I.
+Proof.
+  move=> PI r; apply: (iff_trans (B := gen_ideal_pred a_λ r)); first by [].
+  split; first by apply: idealr_gen_principal.
+  by apply: idealr_principal_gen.
+Qed.
+
+Lemma idealr_def_principal I : principal_idealr_def I -> principal_idealr I.
+Proof.
+  move=> H r; apply: (iff_trans (B := principal_idealr_pred r)); first by [].
+  split; first by apply: idealr_principal_gen.
+  by apply: idealr_gen_principal.
+Qed.
+
+End PrincipalIdeal.
+
+Section IdealGenIdeal.
+
+Variables (R : comRingType) (Λ : Type) (I_λ : Λ -> {pred R})
+          (idealsI_λ : forall λ, idealr (I_λ λ)).
+
+Definition ideal_gen_ideal_pred r := exists laxs : seq (Λ * R * R),
+    all (fun i => i.1.2 \in I_λ i.1.1) laxs  && (r == \sum_(i <- laxs) (i.2 * i.1.2)).
+
+Definition idealr_gen_ideal_def (I : {pred R}) := forall r,
+    r \in I <-> ideal_gen_ideal_pred r.
+
+Inductive Λ' : Type :=
+  Lambda λ r: r \in (I_λ λ) -> Λ'.
+
+Definition a_λ' λ' := match λ' with | Lambda λ r r_in_I_λ => r end.
+
+Lemma idealr_gen_ideal_pred_gen r:
+  ideal_gen_ideal_pred r -> gen_ideal_pred a_λ' r.
+Proof.
+  move=> [laxs /andP [laxs_in /eqP ->]].
+  elim: laxs laxs_in; first by move=> _; exists nil; rewrite !big_nil.
+  move=> lax laxs IHlaxs /andP [lax_in all_laxs]; move: IHlaxs=> /(_ all_laxs) [lxs H].
+  by exists [:: (Lambda lax_in, lax.2) & lxs]; rewrite !big_cons; congr(_ + _).
+Qed.
+
+Lemma idealr_gen_ideal_pred_gen' r:
+  gen_ideal_pred a_λ' r -> ideal_gen_ideal_pred r.
+Proof.
+  move=> [lxs ->]; exists [seq (let (λ, x, H) := lx.1 : Λ' in (λ, x, lx.2)) | lx <- lxs].
+  apply/andP; split.
+    elim: lxs; first by rewrite all_nil.
+    move=> [[λ r' r'_in_I_λ] x] lxs all_lxs /=; apply/andP; split; by [].
+  by rewrite big_map; apply/eqP; apply: eq_bigr; move=> [[λ r' r'_in_I_λ] x] _ /=.
+Qed.
+
+Lemma idealr_gen_ideal (I : {pred R}) :
+  idealr_gen_ideal_def I -> idealr I.
+Proof.
+  move=> H; apply: (gen_ideal_idealr (a_λ := a_λ')).
+  move=> r; split=> [r_in_I | H0]; first by apply/idealr_gen_ideal_pred_gen /H.
+  by apply/H /idealr_gen_ideal_pred_gen'.
+Qed.
+
+End IdealGenIdeal.
+
 
