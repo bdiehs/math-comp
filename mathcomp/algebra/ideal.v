@@ -1,5 +1,8 @@
+(* -*- company-coq-local-symbols: (("<~>" . ?↭) ("\mathfrak{b}" . ?𝔞)); -*- *)
+
 From mathcomp Require Import ssreflect eqtype choice bigop ssreflect ssrbool ssrnat.
-From mathcomp Require Import ssrfun fintype seq ssralg generic_quotient ring_quotient.
+From mathcomp Require Import ssrfun fintype finfun seq ssralg generic_quotient.
+From mathcomp Require Import tuple ring_quotient.
 
 Import GRing.Theory.
 
@@ -7,7 +10,7 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-Local Open Scope ring_scope.
+Local Open Scope ring_scope. 
 Local Open Scope quotient_scope.
 Local Open Scope seq_scope.
 
@@ -27,6 +30,21 @@ Structure prime_idealr (R : ringType) (S : {pred R}) := MkPrimeIdeal {
   prime_idealr_ideal :> proper_idealr S;
   prime_idealr_closed : forall u v, u * v \in S -> (u \in S) || (v \in S)
 }.
+
+Section IdealEq.
+Variables (R : ringType) (I J : {pred R}).
+
+Lemma eq_ideal : I =i J -> idealr I -> idealr J.
+Proof.
+  move=> H [[[? [z_in add_cls]] opp_cls] mul_cls].
+  split; first split; first split; first by [].
+  split; first by rewrite -!H.
+  by move=> u v; rewrite -!H; apply: add_cls.
+  by move=> x; rewrite -!H; apply opp_cls.
+  by move=> a u; rewrite -!H; apply mul_cls.
+Qed.
+
+End IdealEq.
 
 Section IdealTheory.
 Variables (R : ringType) (I : {pred R})
@@ -206,130 +224,301 @@ Qed.
 
 End IDomainQuotient.
 
+Axiom classic : forall P, decidable P.  
 
-Section IdealGen.
+Section GenIdeal.
 
-Variables (R : comRingType) (Λ : Type) (a_λ : Λ -> R).
+Variables (R : ringType) (Λ : Type) (as' : Λ -> R).
+Definition gen_pred r := exists (n: nat) (λs : n.-tuple Λ) (xs : n.-tuple R),
+    r = \sum_i (tnth xs i * as' (tnth λs i)).
+Definition genI : {pred R} := fun r => classic (gen_pred r).
 
-Definition gen_ideal_pred r := exists lxs : seq (Λ * R),
-    r = \sum_(i <- lxs) (i.2 * a_λ i.1).
 
-Definition gen_ideal_def (I : {pred R}) := forall r,
-    r \in I <-> gen_ideal_pred r.
-
-Lemma gen_ideal_addr I : gen_ideal_def I -> addrPred I.
+Lemma gen_addr : addrPred genI.
 Proof.
-  move=> genI; split; first by [].
-  split; first by apply/genI; exists nil; rewrite big_nil.
-  move=> x y /genI [x_gen ->] /genI [y_gen ->]; apply/genI.
-  by exists (x_gen ++ y_gen); rewrite big_cat.
+  split; first by [].
+  split; first by apply/sumboolP; exists 0%nat, [tuple], [tuple]; rewrite big_ord0.
+  move=> r s /sumboolP [rn [rλs [rxs ->]]] /sumboolP [sn [sλs [sxs ->]]]; apply/sumboolP.
+  have size_rsλ : (size (rλs ++ sλs) == (rn + sn)%nat) by apply: cat_tupleP.
+  have size_rsx : (size (rxs ++ sxs) == (rn + sn)%nat) by apply: cat_tupleP.
+  exists (rn + sn)%nat, (Tuple size_rsλ), (Tuple size_rsx).
+  rewrite big_split_ord; congr(_ + _).
+    apply: eq_bigr=> i _; have i_lt_rn : i < rn by [].
+    by congr(_ * _); rewrite {2}/tnth nth_cat size_tuple i_lt_rn -tnth_nth.
+  apply: eq_bigr=> i _.
+  have rn_i_rn : (rn + i < rn = false) by rewrite ltnNge leq_addr.
+  congr(_ * _); rewrite {2}/tnth nth_cat size_tuple /= rn_i_rn.
+    rewrite (tnth_nth (tnth_default (Tuple size_rsx) (rshift rn i))).
+    by congr (nth _ _ _); rewrite -{2}[rn]addn0 subnDl subn0.
+  rewrite (tnth_nth (tnth_default (Tuple size_rsλ) (rshift rn i))).
+  by congr (as' (nth _ _ _)); rewrite -{2}[rn]addn0 subnDl subn0.
+Qed.
+
+Lemma gen_zmod : zmodPred genI.
+Proof.
+  split; first by exact: gen_addr.
+  move=> r /sumboolP [rn [rλs [rxs ->]]]; apply/sumboolP.
+  exists rn, rλs, [tuple -(tnth rxs i) | i < rn].
+  rewrite (big_morph -%R (id1 := 0) (op1 := +%R)); last by exact: oppr0.
+    by apply: eq_bigr=> i _; rewrite tnth_map mulNr tnth_ord_tuple.
+  by move=> x y; rewrite -{1}[y]opprK opprB addrC.
+Qed.
+
+Lemma gen_idealr : idealr genI.
+  split; first by exact: gen_zmod.
+  move=> a r /sumboolP [rn [rλs [rxs ->]]]; apply/sumboolP.
+  exists rn, rλs, [tuple a * (tnth rxs i) | i < rn]; rewrite big_distrr.
+  by apply: eq_bigr=> i _ /=; rewrite tnth_map tnth_ord_tuple mulrA.
+Qed.
+
+Variable (kI : keyed_pred gen_idealr).
+
+Lemma gen_contains : forall λ, as' λ \in kI.
+Proof.
+  case kI=> [? hkI] λ; rewrite !hkI; apply/sumboolP.
+  by exists 1%nat, [tuple λ], [tuple 1]; rewrite big_ord_recl big_ord0 addr0 !tnth0 mul1r. 
 Qed.
   
-Lemma gen_ideal_zmod I : gen_ideal_def I -> zmodPred I.
+Lemma gen_ideal_min : forall J (idealJ : idealr J) (kJ : keyed_pred idealJ), (forall λ, as' λ \in kJ) -> {subset kI <= kJ}.
 Proof.
-  move=> genI; split; first by exact: gen_ideal_addr.
-  move=> x /genI [x_gen ->]; apply/genI; exists [seq (p.1, -p.2) | p <- x_gen].
+  case kI=> [? hkI] J idealJ kJ a_λ_in_J x.
+  rewrite !hkI=> /sumboolP [rn [rλs [rxs ->]]].
+  apply: (big_rec (fun y => y \in kJ)); first by apply: idealr0.
+  move=> lxs y _ y_in_J; apply: rpredD; last by [].
+  by apply: idealMr.
+Qed.
+
+End GenIdeal.
+
+Section FinGenIdeal.
+
+Variables (R : ringType) (n : nat) (a : n.-tuple R).
+Definition fingen_pred r := exists x : n.-tuple R, r = \sum_(i < n) tnth x i * tnth a i.
+Definition fingenI : {pred R} := fun r => classic (fingen_pred r).
+
+Let as' : 'I_n -> R := [ffun i => tnth a i].
+
+Lemma gen_fingen r : gen_pred as' r -> fingen_pred r.
+Proof.
+  move=> [rn [rλs [rxs ->]]].
+  exists [tuple (\sum_(j < rn | (tnth rλs j) == i) tnth rxs j) | i < n].
+  rewrite (partition_big (fun i => tnth rλs i) predT) /=; last by [].
+  apply: eq_bigr=> i _; rewrite tnth_map big_distrl tnth_ord_tuple.
+  by apply: eq_bigr=> j /eqP ->; rewrite /as' ffunE.
+Qed.
+
+Lemma fingen_gen r : fingen_pred r -> gen_pred as' r.
+Proof.
+  move=> [x ->]; exists n, (ord_tuple n), [tuple (tnth x i) | i < n].
+  by apply: eq_bigr=> i _; rewrite /as' tnth_map ffunE tnth_ord_tuple.
+Qed.  
+
+Lemma fingen_idealr : idealr fingenI.
+  apply: (eq_ideal (I := genI as')).
+    move=> r; apply/sumboolP/sumboolP; first by apply: gen_fingen.
+    by apply: fingen_gen.
+  by apply: gen_idealr.    
+Qed.
+
+End FinGenIdeal.
+
+Section PrincipalIdeal.
+
+Variables (R : ringType) (a : R).
+Definition principalI : {pred R} := fingenI [tuple a].
+Definition principal_idealI : idealr principalI := fingen_idealr [tuple a].
+
+End PrincipalIdeal.
+
+Section IdealGenIdeal.
+
+Variables (R : ringType) (Λ : Type) (𝔞s : Λ -> {pred R})
+          (ideals𝔞s : forall λ, idealr (𝔞s λ)).
+
+Definition idealgen_pred r := exists n (λs : n.-tuple Λ) as' xs,
+    (forall i, (tnth as' i) \in 𝔞s (tnth λs i)) /\ (r == \sum_i (tnth xs i) * (tnth as' i)).
+Definition idealgenI : {pred R} := fun r => classic (idealgen_pred r).
+
+Inductive Λ' : Type :=
+  Lambda' λ r : r \in (𝔞s λ) -> Λ'.
+Let as' λ' := match λ' with | Lambda' λ r r_in_I_λ => r end.
+
+Lemma gen_gen_ideal r : gen_pred as' r -> idealgen_pred r.
+Proof.
+  move=> [rn [rλs [rxs ->]]].
+  exists rn, [tuple let (λ, _, _) := (tnth rλs i) in λ | i < rn],
+    [tuple let (_, x, _) := (tnth rλs i) in x | i < rn], rxs; split.
+  move=> i; rewrite !tnth_map tnth_ord_tuple; by case (tnth rλs i).
+  by apply/eqP; apply: eq_bigr=> i _; rewrite tnth_map tnth_ord_tuple.
+Qed.
+
+Lemma gen_ideal_gen r : idealgen_pred r -> gen_pred as' r.
+Proof.
+  move=> [rn [rλs [ras [rxs [ras_in_𝔞s /eqP ->]]]]].
+  exists rn, [tuple (Lambda' (ras_in_𝔞s i)) | i < rn], rxs.
+  apply: eq_bigr=> i _; by rewrite tnth_map tnth_ord_tuple.
+Qed.
+
+Lemma gen_ideal_idealr : idealr idealgenI.
+Proof.
+  apply: (eq_ideal (I := genI as')).
+    move=> r; apply/sumboolP/sumboolP; first by apply: gen_gen_ideal.
+    by apply: gen_ideal_gen.
+  by apply: gen_idealr.    
+Qed.
+  
+End IdealGenIdeal.
+
+Section IdealFinGenIdeal.
+
+Variables (R : ringType) (n : nat) (𝔞s : n.-tuple {pred R})
+          (ideals𝔞 : forall i, idealr (tnth 𝔞s i)).
+
+Definition idealfingen_pred r := exists a : n.-tuple R,
+    (forall i, tnth a i \in tnth 𝔞s i) /\ r = \sum_i tnth a i.
+Definition idealfingenI : {pred R} := fun r => classic (idealfingen_pred r).
+
+Let 𝔞s' : 'I_n -> {pred R} := [ffun i => tnth 𝔞s i].
+
+Lemma idealgen_idealfingen r : idealgen_pred 𝔞s' r -> idealfingen_pred r.
+Proof.
+  move=> [rn [rλs [ras [rxs [ras_in_𝔞s /eqP ->]]]]].
+  exists [tuple (\sum_(j | tnth rλs j == i) tnth rxs j * tnth ras j) | i < n]; split.
+    move=> i; rewrite !tnth_map tnth_ord_tuple.
+    case (ideals𝔞 i)=> [[[_ [? ?]] _] mul_cls].
+    elim/big_ind : _; rewrite //.
+    move=> /= j /eqP λj_eq_i; move: (ras_in_𝔞s j) mul_cls.
+    by rewrite -!λj_eq_i /𝔞s' ffunE=> aj_in_𝔞j mul_cls; apply: mul_cls.
+  rewrite (partition_big (fun i => tnth rλs i) predT) /=; last by [].
+  by apply eq_bigr=> i _; rewrite !tnth_map tnth_ord_tuple.
+Qed.
+
+Lemma idealfingen_idealgen r :  idealfingen_pred r -> idealgen_pred 𝔞s' r.
+Proof.
+  move=> [a [as_in_𝔞s ->]]; exists n, (ord_tuple n), a, [tuple 1 | i < n]; split.
+    by move=> i; rewrite /𝔞s' ffunE tnth_ord_tuple.
+  apply/eqP; apply: eq_bigr=> i _; by rewrite tnth_map mul1r.
+Qed.
+
+Lemma idealfingen_idealr : idealr idealfingenI.
+Proof.
+  apply: (eq_ideal (I := idealgenI 𝔞s')).
+    move=> r; apply/sumboolP/sumboolP; first by apply: idealgen_idealfingen.
+    by apply: idealfingen_idealgen.
+  by apply: gen_ideal_idealr.    
+Qed.
+
+
+
+
+
+(*
+
+Section GenIdeal.
+
+Variables (R : ringType) (Λ : Type) (a_λ : Λ -> R).
+Definition gen_pred r := (exists lxs : seq (Λ * R), r = \sum_(i <- lxs) (i.2 * a_λ i.1)).
+Definition genI : {pred R} := fun r => classic (gen_pred r).
+
+Lemma gen_addr : addrPred genI.
+Proof.
+  split; first by [].
+  split; first by apply/sumboolP; exists nil; rewrite big_nil.
+  move=> x y /sumboolP [x_gen ->] /sumboolP [y_gen ->]; apply/sumboolP.
+  by exists (x_gen ++ y_gen); rewrite big_cat.
+Qed.
+
+Lemma gen_zmod : zmodPred genI.
+Proof.
+  split; first by exact: gen_addr.
+  move=> x /sumboolP [x_gen ->]; apply/sumboolP; exists [seq (p.1, -p.2) | p <- x_gen].
   rewrite (big_morph -%R (id1 := 0) (op1 := +%R)); last by exact: oppr0.
-  by rewrite big_map; apply: eq_bigr => i _; rewrite mulNr.
+    by rewrite big_map; apply: eq_bigr => i _; rewrite mulNr.
   by move=> a b; rewrite -{1}[b]opprK opprB addrC.
 Qed.
 
-Lemma gen_ideal_idealr I : gen_ideal_def I -> idealr I.
-Proof.
-  move=> genI; split; first by exact: gen_ideal_zmod.
-  move=> r x /genI [x_gen ->]; apply/genI; exists [seq (p.1, r * p.2) | p <- x_gen].
+Lemma gen_idealr : idealr genI.
+  split; first by exact: gen_zmod.
+  move=> r x /sumboolP [x_gen ->]; apply /sumboolP; exists [seq (p.1, r * p.2) | p <- x_gen].
   by rewrite big_distrr big_map; apply: eq_bigr => i _ /=; rewrite mulrA.
 Qed.
 
-Variables (I : {pred R}) (genI : gen_ideal_def I)
-          (kI : keyed_pred (gen_ideal_idealr genI)).
+Variable (kI : keyed_pred gen_idealr).
 
-Lemma gen_ideal_contains : forall λ, a_λ λ \in kI.
+Lemma gen_contains : forall λ, a_λ λ \in kI.
 Proof.
-  case kI=> [? hkI] λ; rewrite !hkI; apply/genI.
+  case kI=> [? hkI] λ; rewrite !hkI; apply/sumboolP.
   by exists [:: (λ, 1)]; rewrite big_cons big_nil addr0 mul1r.
 Qed.
   
 Lemma gen_ideal_min : forall J (idealJ : idealr J) (kJ : keyed_pred idealJ), (forall λ, a_λ λ \in kJ) -> {subset kI <= kJ}.
 Proof.
   case kI=> [? hkI] J idealJ kJ a_λ_in_J x.
-  rewrite !hkI=> /genI [x_gen ->].
+  rewrite !hkI=> /sumboolP [x_gen ->].
   apply: (big_rec (fun y => y \in kJ)); first by apply: idealr0.
   move=> lxs y _ y_in_J; apply: rpredD; last by [].
   by apply: idealMr.
 Qed.
-    
-End IdealGen.
+
+End GenIdeal.
+
+Section FinGenIdeal.
+
+Variables (R : ringType) (n : nat) (a : n.-tuple R).
+Definition fingen_pred r := exists x : n.-tuple R, r = \sum_(i < n) tnth x i * tnth a i.
+Definition fingenI : {pred R} := fun r => classic (fingen_pred r).
+
+Let a' : 'I_n -> R := [ffun i => tnth a i].
+
+Lemma gen_fingen r : gen_pred a' r -> fingen_pred r.
+Proof.
+  move=> [r_gen ->]; exists [tuple (\sum_(j <- r_gen | j.1 == i) j.2)| i < n].
+  rewrite big_tnth
+          (partition_big (fun i => (tnth (in_tuple r_gen) i).1) predT); last by [].
+  apply: eq_bigr=> i _; rewrite tnth_map [in RHS]big_tnth big_distrl tnth_ord_tuple.
+  by apply: eq_bigr=> j /andP [_ /eqP ->]; rewrite /a' ffunE.
+Qed.
+
+Lemma fingen_gen r : fingen_pred r -> gen_pred a' r.
+Proof.
+  move=> [x ->]; exists [seq (i, tnth x i) | i <- ord_tuple n].
+  rewrite big_map big_tuple /=; apply: eq_bigr=> i _.
+  by rewrite /a' ffunE tnth_ord_tuple.
+Qed.
+
+Lemma fingen_idealr : idealr fingenI.
+  apply: (eq_ideal (I := genI a')).
+    move=> r; apply/sumboolP/sumboolP; first by apply: gen_fingen.
+    by apply: fingen_gen.
+  by apply: gen_idealr.    
+Qed.
+
+End FinGenIdeal.
 
 Section PrincipalIdeal.
-  
-Variables (R : comRingType) (a : R).
 
-Definition principal_idealr_pred r := (exists x, r = x * a).
-Definition principal_idealr_def (I: {pred R}) := forall r,
-  r \in I <-> principal_idealr_pred r.
-
-Definition Λ := 'I_1.
-Definition a_λ : Λ -> R := fun _ => a.
-
-Definition principal_idealr (I : {pred R}) := gen_ideal_def a_λ I.
-
-
-Lemma idealr_principal_gen r : principal_idealr_pred r -> gen_ideal_pred a_λ r.
-Proof.
-  have H0_leq_1 : (0 < 1) by []; move=> [x ->].
-  by exists [:: (Ordinal H0_leq_1, x)]; rewrite big_cons big_nil addr0.
-Qed.
-
-Lemma idealr_gen_principal r : gen_ideal_pred a_λ r -> principal_idealr_pred r.
-Proof.
-  move=> [r_gen ->]; exists (\sum_(i <- r_gen) i.2).
-  by rewrite big_distrl; apply: eq_bigr.
-Qed.
-  
-Lemma idealr_principal_def I : principal_idealr I -> principal_idealr_def I.
-Proof.
-  move=> PI r; apply: (iff_trans (B := gen_ideal_pred a_λ r)); first by [].
-  split; first by apply: idealr_gen_principal.
-  by apply: idealr_principal_gen.
-Qed.
-
-Lemma idealr_def_principal I : principal_idealr_def I -> principal_idealr I.
-Proof.
-  move=> H r; apply: (iff_trans (B := principal_idealr_pred r)); first by [].
-  split; first by apply: idealr_principal_gen.
-  by apply: idealr_gen_principal.
-Qed.
+Variables (R : ringType) (a : R).
+Definition principalI : {pred R} := fingenI [tuple a].
+Definition principal_idealI : idealr principalI := fingen_idealr [tuple a].
 
 End PrincipalIdeal.
 
 Section IdealGenIdeal.
 
-Variables (R : comRingType) (Λ : Type) (I_λ : Λ -> {pred R})
+Variables (R : ringType) (Λ : Type) (I_λ : Λ -> {pred R})
           (idealsI_λ : forall λ, idealr (I_λ λ)).
 
-Definition ideal_gen_ideal_pred r := exists laxs : seq (Λ * R * R),
+Definition idealgen_pred r := exists laxs : seq (Λ * R * R),
     all (fun i => i.1.2 \in I_λ i.1.1) laxs  && (r == \sum_(i <- laxs) (i.2 * i.1.2)).
 
-Definition idealr_gen_ideal_def (I : {pred R}) := forall r,
-    r \in I <-> ideal_gen_ideal_pred r.
+Let I : {pred R} := fun r => classic (idealgen_pred r).
 
 Inductive Λ' : Type :=
   Lambda λ r: r \in (I_λ λ) -> Λ'.
 
-Definition a_λ' λ' := match λ' with | Lambda λ r r_in_I_λ => r end.
+Let a_λ' λ' := match λ' with | Lambda λ r r_in_I_λ => r end.
 
-Lemma idealr_gen_ideal_pred_gen r:
-  ideal_gen_ideal_pred r -> gen_ideal_pred a_λ' r.
-Proof.
-  move=> [laxs /andP [laxs_in /eqP ->]].
-  elim: laxs laxs_in; first by move=> _; exists nil; rewrite !big_nil.
-  move=> lax laxs IHlaxs /andP [lax_in all_laxs]; move: IHlaxs=> /(_ all_laxs) [lxs H].
-  by exists [:: (Lambda lax_in, lax.2) & lxs]; rewrite !big_cons; congr(_ + _).
-Qed.
-
-Lemma idealr_gen_ideal_pred_gen' r:
-  gen_ideal_pred a_λ' r -> ideal_gen_ideal_pred r.
+Lemma gen_gen_ideal r : gen_pred a_λ' r -> idealgen_pred r.
 Proof.
   move=> [lxs ->]; exists [seq (let (λ, x, H) := lx.1 : Λ' in (λ, x, lx.2)) | lx <- lxs].
   apply/andP; split.
@@ -338,14 +527,79 @@ Proof.
   by rewrite big_map; apply/eqP; apply: eq_bigr; move=> [[λ r' r'_in_I_λ] x] _ /=.
 Qed.
 
-Lemma idealr_gen_ideal (I : {pred R}) :
-  idealr_gen_ideal_def I -> idealr I.
+Lemma gen_ideal_gen r : idealgen_pred r -> gen_pred a_λ' r.
 Proof.
-  move=> H; apply: (gen_ideal_idealr (a_λ := a_λ')).
-  move=> r; split=> [r_in_I | H0]; first by apply/idealr_gen_ideal_pred_gen /H.
-  by apply/H /idealr_gen_ideal_pred_gen'.
-Qed.
+  move=> [laxs /andP [laxs_in /eqP ->]].
+  elim: laxs laxs_in; first by move=> _; exists nil; rewrite !big_nil.
+  move=> lax laxs IHlaxs /andP [lax_in all_laxs]; move: IHlaxs=> /(_ all_laxs) [lxs H].
+  by exists [:: (Lambda lax_in, lax.2) & lxs]; rewrite !big_cons; congr(_ + _).
+Qed.       
 
+Lemma gen_ideal_idealr : idealr I.
+Proof.
+  apply: (eq_ideal (I := genI a_λ')).
+    move=> r; apply/sumboolP/sumboolP; first by apply: gen_gen_ideal.
+    by apply: gen_ideal_gen.
+  by apply: gen_idealr.    
+Qed.
+  
 End IdealGenIdeal.
 
+Section IdealFinGenIdeal.
 
+Variables (R : ringType) (n : nat) (𝔞s : n.-tuple {pred R})
+          (ideals𝔞 : all (fun 𝔞 => classic (idealr 𝔞)) 𝔞s).
+
+Definition idealfingen_pred r := exists x a : n.-tuple R,
+    (forall i, tnth a i \in tnth 𝔞s i) /\ r = \sum_(i < n) tnth x i * tnth a i.
+Definition idealfingenI : {pred R} := fun r => classic (idealfingen_pred r).
+
+Let 𝔞s' : 'I_n -> {pred R} := [ffun i => tnth 𝔞s i].
+
+Lemma idealgen_idealfingen r : idealgen_pred 𝔞s' r -> idealfingen_pred r.
+Proof.
+move=> [r_gen /andP [/all_nthP r_gen_in /eqP ->]].
+  exists [tuple (\sum_(j <- r_gen | j.1.1 == i) j.1.2) | i < n],
+    [tuple (\sum_(j <- r_gen | j.1.1 == i) j.2) | i < n].
+  split.
+  move=> i. rewrite tnth_map.
+  rewrite (big_morph (fun x => x \in tnth 𝔞s i) (id1 := true) (op1 := andb)).
+  rewrite big_all_cond. apply/all_nthP=> j j_leq_r_size. apply/implyP=> j_eq_i.
+  
+  
+  move: r_gen_in=> (_ (0, 0, 0)).
+
+  rewrite /tnth. apply: r_gen_in.
+  
+
+Definition fingen_pred r := exists x : n.-tuple R, r = \sum_(i < n) tnth x i * tnth a i.
+Definition fingenI : {pred R} := fun r => classic (fingen_pred r).
+
+Let a' : 'I_n -> R := [ffun i => tnth a i].
+
+Lemma gen_fingen r : gen_pred a' r -> fingen_pred r.
+Proof.
+  move=> [r_gen ->]; exists [tuple (\sum_(j <- r_gen | j.1 == i) j.2)| i < n].
+  rewrite big_tnth
+          (partition_big (fun i => (tnth (in_tuple r_gen) i).1) predT); last by [].
+  apply: eq_bigr=> i _; rewrite tnth_map [in RHS]big_tnth big_distrl tnth_ord_tuple.
+  by apply: eq_bigr=> j /andP [_ /eqP ->]; rewrite /a' ffunE.
+Qed.
+
+Lemma fingen_gen r : fingen_pred r -> gen_pred a' r.
+Proof.
+  move=> [x ->]; exists [seq (i, tnth x i) | i <- ord_tuple n].
+  rewrite big_map big_tuple /=; apply: eq_bigr=> i _.
+  by rewrite /a' ffunE tnth_ord_tuple.
+Qed.
+
+Lemma fingen_idealr : idealr fingenI.
+  apply: (eq_ideal (I := genI a')).
+    move=> r; apply/sumboolP/sumboolP; first by apply: gen_fingen.
+    by apply: fingen_gen.
+  by apply: gen_idealr.    
+Qed.
+
+End FinGenIdeal.
+
+*)
