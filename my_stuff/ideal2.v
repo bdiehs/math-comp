@@ -140,28 +140,6 @@ Proof.
 Qed.
 
 End PrimeIdealTheory.
-(*
-Section idk.
-
-Context {n m : nat} {T : Type}.
-
-Variables (f1 : T ^ n) (f2 : T ^ m) (t:T) (A B : T -> Prop).
-Hypothesis AH : forall j, A (f1 j).
-Hypothesis BH : forall j, B (f1 j).
-
-
-Definition smth : 'I_(n + m) -> T :=
-  fun i => match (split i) with
-        | inl j => f1 j
-        | inr j => f2 j
-        end.
-
-Lemma idk : forall i, A (smth i) \/ B (smth i). 
-Proof.
-  move=> i. case (splitP i).
-*)  
-
-
 
 Section GenIdeal.
   
@@ -541,11 +519,389 @@ End MaximalIdealTheory.
 
 Coercion maximal_prime_ideal : maximal_idealr >-> prime_idealr.
 
+Local Open Scope quotient_scope.
+
+
+Module Quotient.
+
+Section ZmodQuotient.
+Variables (R : ringType) (I : idealr R).
+
+Definition equiv (x y : R) := (x - y) \in I.
+
+Lemma equivE x y : (equiv x y) = (x - y \in I). Proof. by []. Qed.
+
+Lemma equiv_is_equiv : equiv_class_of equiv.
+Proof.
+split=> [x|x y|y x z]; rewrite !equivE ?subrr ?ideal0 //.
+   by rewrite -opprB idealN.
+by move=> *; rewrite -[x](addrNK y) -addrA idealD.
+Qed.
+
+Canonical equiv_equiv := EquivRelPack equiv_is_equiv.
+Canonical equiv_encModRel := defaultEncModRel equiv.
+
+Definition type := {eq_quot equiv}.
+Definition type_of of phant R := type.
+
+Canonical rquot_quotType := [quotType of type].
+Canonical rquot_eqType := [eqType of type].
+Canonical rquot_choiceType := [choiceType of type].
+Canonical rquot_eqQuotType := [eqQuotType equiv of type].
+
+Lemma idealrBE x y : (x - y) \in I = (x == y %[mod type]).
+Proof. by rewrite piE equivE. Qed.
+
+Lemma idealrDE x y : (x + y) \in I = (x == - y %[mod type]).
+Proof. by rewrite -idealrBE opprK. Qed.
+
+Definition zero : type := lift_cst type 0.
+Definition add := lift_op2 type +%R.
+Definition opp := lift_op1 type -%R.
+
+Canonical pi_zero_morph := PiConst zero.
+
+Lemma pi_opp : {morph \pi : x / - x >-> opp x}.
+Proof.
+move=> x; unlock opp; apply/eqP; rewrite piE equivE.
+by rewrite -opprD idealN idealrDE opprK reprK.
+Qed.
+
+Canonical pi_opp_morph := PiMorph1 pi_opp.
+
+Lemma pi_add : {morph \pi : x y / x + y >-> add x y}.
+Proof.
+move=> x y /=; unlock add; apply/eqP; rewrite piE equivE.
+rewrite opprD addrAC addrA -addrA.
+by rewrite idealD // (idealrBE, idealrDE) ?pi_opp ?reprK.
+Qed.
+Canonical pi_add_morph := PiMorph2 pi_add.
+
+Lemma addqA: associative add.
+Proof. by move=> x y z; rewrite -[x]reprK -[y]reprK -[z]reprK !piE addrA. Qed.
+
+Lemma addqC: commutative add.
+Proof. by move=> x y; rewrite -[x]reprK -[y]reprK !piE addrC. Qed.
+
+Lemma add0q: left_id zero add.
+Proof. by move=> x; rewrite -[x]reprK !piE add0r. Qed.
+
+Lemma addNq: left_inverse zero opp add.
+Proof. by move=> x; rewrite -[x]reprK !piE addNr. Qed.
+
+Definition rquot_zmodMixin := ZmodMixin addqA addqC add0q addNq.
+Canonical rquot_zmodType := Eval hnf in ZmodType type rquot_zmodMixin.
+
+Definition rquot_zmodQuotMixin := ZmodQuotMixin type (lock _) pi_opp pi_add.
+Canonical rquot_zmodQuotType := ZmodQuotType 0 -%R +%R type rquot_zmodQuotMixin.
+
+End ZmodQuotient.
+
+Notation "{quot I }" := (@type_of _ I (Phant _)).
+
+Section RingQuotient.
+
+Variables (R : comRingType) (I : proper_idealr R).
+
+Local Notation type := {quot I}.
+
+Definition one: type := lift_cst type 1.
+Definition mul := lift_op2 type *%R.
+
+Canonical pi_one_morph := PiConst one.
+
+Lemma pi_mul: {morph \pi : x y / x * y >-> mul x y}.
+Proof.
+move=> x y; unlock mul; apply/eqP; rewrite piE equivE.
+rewrite -[_ * _](addrNK (x * repr (\pi_type y))) -mulrBr.
+rewrite -addrA -mulrBl idealD //.
+  by rewrite idealMr // idealrDE opprK reprK.
+by rewrite mulrC idealMr // idealrDE opprK reprK.
+Qed.
+Canonical pi_mul_morph := PiMorph2 pi_mul.
+
+Lemma mulqA: associative mul.
+Proof. by move=> x y z; rewrite -[x]reprK -[y]reprK -[z]reprK !piE mulrA. Qed.
+
+Lemma mulqC: commutative mul.
+Proof. by move=> x y; rewrite -[x]reprK -[y]reprK !piE mulrC. Qed.
+
+Lemma mul1q: left_id one mul.
+Proof. by move=> x; rewrite -[x]reprK !piE mul1r. Qed.
+
+Lemma mulq_addl: left_distributive mul +%R.
+Proof.
+move=> x y z; rewrite -[x]reprK -[y]reprK -[z]reprK.
+by apply/eqP; rewrite piE /= mulrDl equiv_refl.
+Qed.
+
+Lemma nonzero1q: one != 0.
+Proof. by rewrite piE equivE subr0 prop_idealr1. Qed.
+
+Definition rquot_comRingMixin :=
+  ComRingMixin mulqA mulqC mul1q mulq_addl nonzero1q.
+
+Canonical rquot_ringType    := Eval hnf in RingType type rquot_comRingMixin.
+Canonical rquot_comRingType := Eval hnf in ComRingType type mulqC.
+
+Definition rquot_ringQuotMixin := RingQuotMixin type (lock _) pi_mul.
+Canonical rquot_ringQuotType := RingQuotType 1 *%R type rquot_ringQuotMixin.
+
+End RingQuotient.
+
+Section comUnitRingQuotient.
+
+Variables (R : comRingType) (I : proper_idealr R).
+
+Local Notation type := {quot I}.
+
+Definition unit (x : {quot I}) := `[<exists x'', x'' * x = 1>].
+
+Lemma inv_exists (x : {quot I}) : exists x',
+    if (x \in unit) then (x' * x = 1) else x' = x.
+Proof.
+  case: (x \in unit) /idP=> [/asboolP [x' <-]| nxunit]; first by exists x'.
+  by exists x.
+Qed.  
+Definition inv (x : {quot I}) : {quot I} := projT1 (cid (inv_exists x)).
+Definition inv_ok x : if (x \in unit) then ((inv x) * x = 1) else inv x = x :=
+  projT2 (cid (inv_exists x)).
+
+Lemma mulqVx : {in unit, left_inverse 1 inv *%R}.
+Proof.
+  by move=> x x_unit; move: (inv_ok x); rewrite x_unit.
+Qed.
+
+Lemma unitqPl : forall x y, y * x = 1 -> unit x.
+Proof.
+  by move=> x y yx1; apply/asboolP; exists y.
+Qed.
+
+Lemma invq0id : {in [predC unit], inv =1 id}.
+Proof.
+  by move=> x /negbTE /= nxunit; move: (inv_ok x); rewrite nxunit.
+Qed.
+
+Definition rquot_comUnitRingMixin := ComUnitRingMixin mulqVx unitqPl invq0id.
+
+Canonical rquot_UnitRingType := Eval hnf in UnitRingType type rquot_comUnitRingMixin.
+Canonical rquot_comUnitRingType := Eval hnf in
+ [comUnitRingType of type].
+
+End comUnitRingQuotient.
+
+Section IDomainQuotient.
+
+Variables (R : comRingType) (I : prime_idealr R).
+
+Local Notation type := {quot I}.
+  
+Lemma rquot_IdomainAxiom (x y : {quot I}): x * y = 0 -> (x == 0) || (y == 0).
+Proof.
+  by move=> /eqP; rewrite -[x]reprK -[y]reprK !piE !equivE !subr0 prime_idealrM.
+Qed.
+
+Canonical rquot_idomainType := Eval hnf in IdomainType type rquot_IdomainAxiom.
+
+End IDomainQuotient.
+
+Section FieldQuotient.
+
+Variables (R : comRingType) (I : maximal_idealr R).
+
+Local Notation type := {quot I}.
+
+Lemma rquot_FieldAxiom (x : {quot I}): (x != 0) -> x \is a GRing.unit.
+Proof.
+  rewrite -[x]reprK !piE !equivE subr0=> /maximal_nI1_ex [a [b [Ia [eq1abx]]]].
+  by apply/asboolP; exists (\pi b); apply/eqP; rewrite !piE !equivE eq1abx idealBC addrK.
+Qed.
+
+Canonical rquot_fieldType := Eval hnf in FieldType type rquot_FieldAxiom.
+
+End FieldQuotient.
+
+End Quotient.
+
+Notation "{ideal_quot I }" := (@Quotient.type_of _ I (Phant _)).
+Notation "x == y %[mod_ideal I ]" :=
+  (x == y %[mod {ideal_quot I}]) : quotient_scope.
+Notation "x = y %[mod_ideal I ]" :=
+  (x = y %[mod {ideal_quot I}]) : quotient_scope.
+Notation "x != y %[mod_ideal I ]" :=
+  (x != y %[mod {ideal_quot I}]) : quotient_scope.
+Notation "x <> y %[mod_ideal I ]" :=
+  (x <> y %[mod {ideal_quot I}]) : quotient_scope.
+
+Canonical Quotient.rquot_eqType.
+Canonical Quotient.rquot_choiceType.
+Canonical Quotient.rquot_zmodType.
+Canonical Quotient.rquot_ringType.
+Canonical Quotient.rquot_comRingType.
+Canonical Quotient.rquot_quotType.
+Canonical Quotient.rquot_eqQuotType.
+Canonical Quotient.rquot_zmodQuotType.
+Canonical Quotient.rquot_ringQuotType.
+
+(*
+Section PairIdealDef.
+
+Variables (R1 R2 : comRingType) (I1 : idealr R1) (I2 : idealr R2).
+
+Let I p := (p.1 \in I1) && (p.2 \in I2).
+
+Theorem pairI_ideal_theory : idealr_theory I.
+Proof.
+  split; first by apply/andP; split; apply: ideal0.
+  - move=> x y /andP [Ix1 Ix2] /andP [Iy1 Iy2].
+    by apply/andP; split; apply idealB.
+  - by move=> a x /andP [Ix1 Ix2]; apply/andP; split; apply: idealMr.
+Qed.
+
+Definition pairIdeal := MkIdeal pairI_ideal_theory.
+
+End PairIdealDef.
+
+Section PairIdealTheory.
+
+Variables (R1 R2 : comRingType) (I : idealr (pair_ringType R1 R2)).
+
+Definition Il0 a := (a, 0) \in I.
+
+Lemma pairl0_ideal_theory : idealr_theory Il0.
+Proof.
+  split. by apply: ideal0.
+  - move=> x y Ix Iy; have Ixy := (idealB Ix Iy).
+    by rewrite /GRing.add /GRing.opp /= /add_pair /opp_pair /= subr0 in Ixy.
+  - move=> a x Ix. have Iax := (idealMr (a, 0) Ix).
+    by rewrite /GRing.mul /= /mul_pair /= mulr0 in Iax.
+Qed.
+
+Definition pairl0Ideal := MkIdeal pairl0_ideal_theory.
+
+Definition Ir0 b := (0, b) \in I.
+
+Lemma pairr0_ideal_theory : idealr_theory Ir0.
+Proof.
+  split. by apply: ideal0.
+  - move=> x y Ix Iy; have Ixy := (idealB Ix Iy).
+    by rewrite /GRing.add /GRing.opp /= /add_pair /opp_pair /= subr0 in Ixy.
+  - move=> a x Ix. have Iax := (idealMr (0, a) Ix).
+    by rewrite /GRing.mul /= /mul_pair /= mulr0 in Iax.
+Qed.
+
+Definition pairr0Ideal := MkIdeal pairr0_ideal_theory.
+
+
+Theorem idealr_pair : exists I1 I2, I =i pairIdeal I1 I2.
+Proof.
+  exists pairl0Ideal, pairr0Ideal=> [[x1 x2]].
+    apply/idP/idP=> [Ix | /andP [Ix1 Ix2]].
+    have Ix1 := idealMr (1, 0) Ix; have Ix2 := idealMr (0, 1) Ix.
+    rewrite /GRing.mul /= /mul_pair /= !mul1r !mul0r in Ix1, Ix2.
+    by apply/andP; split.
+  have Ix12 := idealD (I := I) Ix1 Ix2.
+  by rewrite /GRing.add /= /add_pair /= add0r addr0 in Ix12.
+Qed.
+
+End PairIdealTheory.
+*)
+
+Section Noetherian.
+
+Definition isNoetherian1 (R : comRingType) := forall (I : idealr R),
+    exists n (a : R ^ n), I = fingenIdeal a.
+
+Definition isNoetherian2 (R : comRingType) := forall (I : nat -> idealr R),
+    (forall n, {subset I n <= I n.+1}) -> exists n, forall m, m >= n -> I m = I n.
+
+Definition isNoetherian3 (R : comRingType) :=
+  forall (S : {pred (idealr R)}) I0 (_ : I0 \in S),
+  exists I_max, I_max \in S /\ forall I, I \in S -> {subset I_max <= I} -> I = I_max.
+
+Definition isNoetherian := isNoetherian1.
+
+Lemma noetherian12 (R : comRingType) : isNoetherian1 R -> isNoetherian2 R.
+Proof.
+  move=> nR I I_incr.
+  set I' := genIdeal (fun r => `[<exists n, r \in I n>]).
+  move: (nR I')=> [n [a I'a]].
+  have Is_mono p q (leq_pq : p <= q) : {subset I p <= I q}.
+    apply: (homo_leq _ _ I_incr leq_pq); first by move=> x; apply: sub_refl.
+    by move=> I2 I1 I3 I21 I32 x I1x; apply: I32; apply: I21.
+  have Ia : forall i, exists m, a i \in I m.
+    move=> i; move: (fingenIdeal_in a i); rewrite -I'a=> /asboolP [m [b [x [Ib ->]]]].
+    pose Ibf i := projT1 (cid (asboolW (Ib i))).
+    pose Ibf_ok i : b i \in I (Ibf i) := projT2 (cid (asboolW (Ib i))).
+    exists (\max_(j < m) Ibf j); apply: ideal_sum=> j _.
+    by apply: (Is_mono (Ibf j) _ (leq_bigmax _)); apply: idealMr.
+  pose Iaf i := projT1 (cid (Ia i)).
+  pose Iaf_ok i : a i \in I (Iaf i) := projT2 (cid (Ia i)).
+  exists (\max_(i < n) Iaf i)=> m mmax; apply: ideal_ext=> r; apply/idP/idP=> [Imr | Ir].
+    have Ir : r \in I' by apply/genIdeal_in/asboolP; exists m.
+    move: Ir; rewrite I'a=> /asboolP [x ->]; apply: ideal_sum=> i _.
+    by apply/idealMr/(Is_mono (Iaf i) _ (leq_bigmax _)).
+  by apply: (Is_mono _ _ mmax).
+Qed.
+
+(*
+
+Lemma noetherian23 (R : comRingType) : isNoetherian2 R -> isNoetherian3 R.
+Proof.
+  move=> nR S I0 SI0; apply/existsPN=> Hcontra.
+  have next : forall (Isig : {I: idealr R | I \in S}), exists I'sig : {I | I \in S},
+      let I := sval Isig in let I' := sval I'sig in
+      {subset I <= I'} /\ I' <> I.
+    move=> [I SI]; move: (Hcontra I)=> /and_asboolP.
+    rewrite negb_and=> /orP[/asboolP nSI |] // /existsp_asboolPn.
+    move=> [I' /not_implyP].
+    => /and_asboolP.
+    rewrite negb_and.
+  move=> [I SI]; move: (Hcontra I)=> /and_asboolP.
+    rewrite negb_and=> /orP[/asboolP nSI |] // /existsp_asboolPn.
+    move=>[I' /Nimply [SI' /contrapT I'ltI]]; exists (Sub I' SI').
+  set Is_sig := fix f (n : nat) : {I| I \in S} := match n with
+            | 0 => (Sub I0 SI0)
+            | n.+1 => sval (cid (next (f n)))
+            end.
+  set Is := fun n => sval (Is_sig n).
+  apply: (contrap (fun (_ : True) => (nR Is))); rewrite // Nimply /Is /=; split=> [n x | ].
+    by apply (svalP (cid (next _))).
+  apply/forallNP=> n; apply/existsNP; exists n.+1=> /(_ (leqnSn _)) /=.
+  by apply (svalP (cid (next _))).
+Qed.
+
+Lemma noetherian31 (R : comRingType) : isNoetherian3 R -> isNoetherian1 R.
+Proof.
+  move=> nR I.
+  set S : {pred idealr R} := fun J => `[<(exists n (a: n.-tuple R), J = fingenIdeal a) /\ {subset J <= I}>].
+  have S0 : zeroIdeal R \in S. (*TODO: this should be fast using a lemma*)
+    apply/asboolP; split; last by move=> _ /eqP ->; apply: ideal0.
+    exists 0%nat, [tuple]; apply ideal_ext=> x; apply/idP/idP.
+      move=> /eqP ->; apply: ideal0.
+    move=> /asboolP [xs ->]; rewrite big_ord0; apply: ideal0.
+  move: nR=> /(_ S _ S0) [_ [/asboolP [[n [a ->]] Ia] amax]].
+  case: `[<I = fingenIdeal a>] /asboolP=> [-> |]; first by exists n, a.
+  move=> /(contrap (@ideal_ext _ _ _)) /existsNP=> [[x]].
+  case Ix: (x \in I); case ax: (x \in fingenIdeal a)=> // _.
+    set Ia' := fingenIdeal [tuple of x :: a].
+    have SIa' : Ia' \in S. (*Second goal TODO*)
+      apply/asboolP; split; first by exists (n.+1), [tuple of x :: a].
+      move=> r /asboolP [rs ->]; rewrite big_ord_recl tnth0; apply: idealD. 
+        by apply: idealMr.
+      case: (tupleP rs)=> r0 rs'; apply: Ia; apply/asboolP.
+      by exists rs'; apply: eq_bigr=> i _; rewrite !tnthS.
+    apply: contrapR (amax Ia' SIa')=> _; split=> [r /asboolP [rs ->] | Ia_eq].
+      apply/asboolP; exists [tuple of 0::rs].
+      by rewrite big_ord_recl tnth0 mul0r add0r; apply: eq_bigr=> i _; rewrite !tnthS. 
+    have Ia'x := (fingen_in [tuple of x::a] ord0).
+    by rewrite tnth0 -/Ia' Ia_eq ax in Ia'x.
+  by have Ix' := (Ia x ax); rewrite Ix in Ix'.
+Qed. 
 
 
 
-
-
+*)
 
 
 
