@@ -101,8 +101,8 @@ Reserved Notation "x != y %[mod_eq e ]" (at level 70, y at next level,
   no associativity,   format "'[hv ' x '/'  !=  y '/'  %[mod_eq  e ] ']'").
 Reserved Notation "x <> y %[mod_eq e ]" (at level 70, y at next level,
   no associativity,   format "'[hv ' x '/'  <>  y '/'  %[mod_eq  e ] ']'").
-Reserved Notation "{eq_quot e }" (at level 0, e at level 0,
-  format "{eq_quot  e }", only parsing).
+Reserved Notation "{eq_quot e }"
+  (at level 0, e at level 0, format "{eq_quot  e }").
 
 Delimit Scope quotient_scope with qT.
 Local Open Scope quotient_scope.
@@ -482,7 +482,7 @@ Lemma equiv_sym : symmetric e. Proof. by case: e => [] ? []. Qed.
 Lemma equiv_trans : transitive e. Proof. by case: e => [] ? []. Qed.
 
 Lemma eq_op_trans (T' : eqType) : transitive (@eq_op T').
-Proof. by move=> x y z; move/eqP->; move/eqP->. Qed.
+Proof. by move=> x y z /eqP -> /eqP ->. Qed.
 
 Lemma equiv_ltrans: left_transitive e.
 Proof. by apply: left_trans; [apply: equiv_sym|apply: equiv_trans]. Qed.
@@ -598,8 +598,7 @@ Definition pi := locked (fun x => EquivQuotient (canon_id x)).
 
 Lemma ereprK : cancel erepr pi.
 Proof.
-unlock pi; case=> x hx; move/eqP:(hx)=> hx'.
-exact: (@val_inj _ _ [subType for erepr]).
+by unlock pi; case=> x hx; apply/(@val_inj _ _ [subType for erepr])/eqP.
 Qed.
 
 Local Notation encDE := (encModRelE encD).
@@ -629,9 +628,7 @@ exact/pi_CD.
 Qed.
 
 Lemma equivQTP : cancel (CD \o erepr) (pi \o DC).
-Proof.
-by move=> x; rewrite /= (pi_CD _ (erepr x) _) ?ereprK /eC /= ?encDP.
-Qed.
+Proof. by move=> x; rewrite /= (pi_CD _ (erepr x) _) ?ereprK /eC /= ?encDP. Qed.
 
 Local Notation qT := (type_of (Phantom (rel D) encD)).
 Definition quotClass := QuotClass equivQTP.

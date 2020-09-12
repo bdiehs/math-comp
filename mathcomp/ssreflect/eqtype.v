@@ -208,7 +208,7 @@ Arguments eqVneq {T} x y, {T x y}.
 Section Contrapositives.
 
 Variables (T1 T2 : eqType).
-Implicit Types (A : pred T1) (b : bool) (x : T1) (z : T2).
+Implicit Types (A : pred T1) (b : bool) (P : Prop) (x : T1) (z : T2).
 
 Lemma contraTeq b x y : (x != y -> ~~ b) -> b -> x = y.
 Proof. by move=> imp hyp; apply/eqP; apply: contraTT hyp. Qed.
@@ -219,6 +219,12 @@ Proof. by move=> imp hyp; apply/eqP; apply: contraNT hyp. Qed.
 Lemma contraFeq b x y : (x != y -> b) -> b = false -> x = y.
 Proof. by move=> imp /negbT; apply: contraNeq. Qed.
 
+Lemma contraPeq P x y : (x != y -> ~ P) -> P -> x = y.
+Proof. by move => imp HP; apply: contraTeq isT => /imp /(_ HP). Qed.
+
+Lemma contra_not_eq P x y : (x != y -> P) -> ~ P -> x = y.
+Proof. by move => imp; apply: contraPeq => /imp HP /(_ HP). Qed.
+
 Lemma contraTneq b x y : (x = y -> ~~ b) -> b -> x != y.
 Proof. by move=> imp; apply: contraTN => /eqP. Qed.
 
@@ -227,6 +233,9 @@ Proof. by move=> imp; apply: contraNN => /eqP. Qed.
 
 Lemma contraFneq b x y : (x = y -> b) -> b = false -> x != y.
 Proof. by move=> imp /negbT; apply: contraNneq. Qed.
+
+Lemma contraPneq P x y : (x = y -> ~ P) -> P -> x != y.
+Proof. by move => imp; apply: contraPN => /eqP. Qed.
 
 Lemma contra_eqN b x y : (b -> x != y) -> x = y -> ~~ b.
 Proof. by move=> imp /eqP; apply: contraL. Qed.
@@ -245,6 +254,9 @@ Proof. by move=> imp; apply: contraNF => /imp->. Qed.
 
 Lemma contra_neqT b x y : (~~ b -> x = y) -> x != y -> b.
 Proof. by move=> imp; apply: contraNT => /imp->. Qed.
+
+Lemma contra_neq_not P x y : (P -> x = y) -> x != y -> ~ P.
+Proof. by move => imp;apply: contraNnot => /imp->. Qed.
 
 Lemma contra_eq z1 z2 x1 x2 : (x1 != x2 -> z1 != z2) -> z1 = z2 -> x1 = x2.
 Proof. by move=> imp /eqP; apply: contraTeq. Qed.
@@ -409,7 +421,7 @@ Lemma bij_eq : bijective f -> forall x y, (f x == f y) = (x == y).
 Proof. by move/bij_inj; apply: inj_eq. Qed.
 
 Lemma can2_eq : cancel f g -> cancel g f -> forall x y, (f x == y) = (x == g y).
-Proof. by move=> fK gK x y; rewrite -{1}[y]gK; apply: can_eq. Qed.
+Proof. by move=> fK gK x y; rewrite -[y in LHS]gK; apply: can_eq. Qed.
 
 Lemma inj_in_eq :
   {in D &, injective f} -> {in D &, forall x y, (f x == f y) = (x == y)}.

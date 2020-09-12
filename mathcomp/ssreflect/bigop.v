@@ -158,11 +158,9 @@ Reserved Notation "\sum_ ( i | P ) F"
   (at level 41, F at level 41, i at level 50,
            format "'[' \sum_ ( i  |  P ) '/  '  F ']'").
 Reserved Notation "\sum_ ( i : t | P ) F"
-  (at level 41, F at level 41, i at level 50,
-           only parsing).
+  (at level 41, F at level 41, i at level 50). (* only parsing *)
 Reserved Notation "\sum_ ( i : t ) F"
-  (at level 41, F at level 41, i at level 50,
-           only parsing).
+  (at level 41, F at level 41, i at level 50). (* only parsing *)
 Reserved Notation "\sum_ ( i < n | P ) F"
   (at level 41, F at level 41, i, n at level 50,
            format "'[' \sum_ ( i  <  n  |  P ) '/  '  F ']'").
@@ -195,11 +193,9 @@ Reserved Notation "\max_ ( i | P ) F"
   (at level 41, F at level 41, i at level 50,
            format "'[' \max_ ( i  |  P ) '/  '  F ']'").
 Reserved Notation "\max_ ( i : t | P ) F"
-  (at level 41, F at level 41, i at level 50,
-           only parsing).
+  (at level 41, F at level 41, i at level 50). (* only parsing *)
 Reserved Notation "\max_ ( i : t ) F"
-  (at level 41, F at level 41, i at level 50,
-           only parsing).
+  (at level 41, F at level 41, i at level 50). (* only parsing *)
 Reserved Notation "\max_ ( i < n | P ) F"
   (at level 41, F at level 41, i, n at level 50,
            format "'[' \max_ ( i  <  n  |  P ) '/  '  F ']'").
@@ -232,11 +228,9 @@ Reserved Notation "\prod_ ( i | P ) F"
   (at level 36, F at level 36, i at level 50,
            format "'[' \prod_ ( i  |  P ) '/  '  F ']'").
 Reserved Notation "\prod_ ( i : t | P ) F"
-  (at level 36, F at level 36, i at level 50,
-           only parsing).
+  (at level 36, F at level 36, i at level 50). (* only parsing *)
 Reserved Notation "\prod_ ( i : t ) F"
-  (at level 36, F at level 36, i at level 50,
-           only parsing).
+  (at level 36, F at level 36, i at level 50). (* only parsing *)
 Reserved Notation "\prod_ ( i < n | P ) F"
   (at level 36, F at level 36, i, n at level 50,
            format "'[' \prod_ ( i  <  n  |  P ) '/  '  F ']'").
@@ -854,7 +848,7 @@ Proof. by rewrite unlock; elim: r => //= j r ->. Qed.
 Lemma big_nth x0 r (P : pred I) F :
   \big[op/idx]_(i <- r | P i) F i
      = \big[op/idx]_(0 <= i < size r | P (nth x0 r i)) (F (nth x0 r i)).
-Proof. by rewrite -{1}(mkseq_nth x0 r) big_map /index_iota subn0. Qed.
+Proof. by rewrite -[r in LHS](mkseq_nth x0) big_map /index_iota subn0. Qed.
 
 Lemma big_hasC r (P : pred I) F :
   ~~ has P r -> \big[op/idx]_(i <- r | P i) F i = idx.
@@ -949,9 +943,7 @@ Proof. by move=> ge_m_n; rewrite /index_iota (eqnP ge_m_n) big_nil. Qed.
 Lemma big_ltn_cond m n (P : pred nat) F :
     m < n -> let x := \big[op/idx]_(m.+1 <= i < n | P i) F i in
   \big[op/idx]_(m <= i < n | P i) F i = if P m then op (F m) x else x.
-Proof.
-by case: n => [//|n] le_m_n; rewrite /index_iota subSn // big_cons.
-Qed.
+Proof. by case: n => [//|n] le_m_n; rewrite /index_iota subSn // big_cons. Qed.
 
 Lemma big_ltn m n F :
      m < n ->
@@ -1220,12 +1212,20 @@ Lemma big_mkcondl I r (P Q : pred I) F :
      \big[*%M/1]_(i <- r | Q i) (if P i then F i else 1).
 Proof. by rewrite big_andbC big_mkcondr. Qed.
 
-Lemma big_rmcond (I : eqType) (r : seq I) (P : pred I) F :
+Lemma big_uncond I (r : seq I) (P : pred I) F :
+  (forall i, ~~ P i -> F i = 1) ->
+  \big[*%M/1]_(i <- r | P i) F i = \big[*%M/1]_(i <- r) F i.
+Proof.
+move=> F_eq1; rewrite big_mkcond; apply: eq_bigr => i.
+by case: (P i) (F_eq1 i) => // ->.
+Qed.
+
+Lemma big_rmcond_in (I : eqType) (r : seq I) (P : pred I) F :
   (forall i, i \in r -> ~~ P i -> F i = 1) ->
   \big[*%M/1]_(i <- r | P i) F i = \big[*%M/1]_(i <- r) F i.
 Proof.
-move=> Fidx; rewrite big_mkcond big_seq_cond [in RHS]big_seq_cond ?big_mkcondr.
-by apply: eq_bigr => i /Fidx {Fidx}; case: (P i) => // ->.
+move=> F_eq1; rewrite big_seq_cond [RHS]big_seq_cond !big_mkcondl big_uncond//.
+by move=> i /F_eq1; case: ifP => // _ ->.
 Qed.
 
 Lemma big_cat I r1 r2 (P : pred I) F :
@@ -1329,7 +1329,7 @@ Lemma perm_big (I : eqType) r1 r2 (P : pred I) F :
 Proof.
 move/permP; rewrite !(big_mkcond _ _ P).
 elim: r1 r2 => [|i r1 IHr1] r2 eq_r12.
-  by case: r2 eq_r12 => // i r2; move/(_ (pred1 i)); rewrite /= eqxx.
+  by case: r2 eq_r12 => // i r2 /(_ (pred1 i)); rewrite /= eqxx.
 have r2i: i \in r2 by rewrite -has_pred1 has_count -eq_r12 /= eqxx.
 case/splitPr: r2 / r2i => [r3 r4] in eq_r12 *; rewrite big_cat /= !big_cons.
 rewrite mulmCA; congr (_ * _); rewrite -big_cat; apply: IHr1 => a.
@@ -1472,18 +1472,29 @@ Lemma big_image_id (J : finType) (h : J -> R) (A : pred J) :
   \big[*%M/1]_(i <- [seq h j | j in A]) i = \big[*%M/1]_(j in A) h j.
 Proof. exact: big_image. Qed.
 
-Lemma reindex_onto (I J : finType) (h : J -> I) h' (P : pred I) F :
-   (forall i, P i -> h (h' i) = i) ->
+Lemma reindex_omap (I J : finType) (h : J -> I) h' (P : pred I) F :
+    (forall i, P i -> omap h (h' i) = some i) ->
   \big[*%M/1]_(i | P i) F i =
-    \big[*%M/1]_(j | P (h j) && (h' (h j) == j)) F (h j).
+    \big[*%M/1]_(j | P (h j) && (h' (h j) == some j)) F (h j).
 Proof.
 move=> h'K; have [n lePn] := ubnP #|P|; elim: n => // n IHn in P h'K lePn *.
 case: (pickP P) => [i Pi | P0]; last first.
   by rewrite !big_pred0 // => j; rewrite P0.
-rewrite (bigD1 i Pi) (bigD1 (h' i)) h'K ?Pi ?eqxx //=; congr (_ * _).
-rewrite {}IHn => [|j /andP[]|]; [|by auto | by rewrite (cardD1x i) in lePn]. 
-apply: eq_bigl => j; rewrite andbC -andbA (andbCA (P _)); case: eqP => //= hK.
-by congr (_ && ~~ _); apply/eqP/eqP=> [<-|->] //; rewrite h'K.
+have := h'K i Pi; case h'i_eq : (h' i) => [/= j|//] [hj_eq].
+rewrite (bigD1 i Pi) (bigD1 j) hj_eq ?Pi ?h'i_eq ?eqxx //=; congr (_ * _).
+rewrite {}IHn => [|k /andP[]|]; [|by auto | by rewrite (cardD1x i) in lePn].
+apply: eq_bigl => k; rewrite andbC -andbA (andbCA (P _)); case: eqP => //= hK.
+congr (_ && ~~ _); apply/eqP/eqP => [|->//].
+by move=> /(congr1 h'); rewrite h'i_eq hK => -[].
+Qed.
+Arguments reindex_omap [I J] h h' [P F].
+
+Lemma reindex_onto (I J : finType) (h : J -> I) h' (P : pred I) F :
+    (forall i, P i -> h (h' i) = i) ->
+  \big[*%M/1]_(i | P i) F i =
+    \big[*%M/1]_(j | P (h j) && (h' (h j) == j)) F (h j).
+Proof.
+by move=> h'K; rewrite (reindex_omap h (some \o h'))//= => i Pi; rewrite h'K.
 Qed.
 Arguments reindex_onto [I J] h h' [P F].
 
@@ -1500,6 +1511,19 @@ Lemma reindex_inj (I : finType) (h : I -> I) (P : pred I) F :
   injective h -> \big[*%M/1]_(i | P i) F i = \big[*%M/1]_(j | P (h j)) F (h j).
 Proof. by move=> injh; apply: reindex (onW_bij _ (injF_bij injh)). Qed.
 Arguments reindex_inj [I h P F].
+
+Lemma bigD1_ord n j (P : pred 'I_n) F :
+  P j -> \big[*%M/1]_(i < n | P i) F i
+    = F j * \big[*%M/1]_(i < n.-1 | P (lift j i)) F (lift j i).
+Proof.
+move=> Pj; rewrite (bigD1 j Pj) (reindex_omap (lift j) (unlift j))/=.
+  (** Coq >= 8.10 *)
+  (* by under eq_bigl do rewrite liftK eq_sym eqxx neq_lift ?andbT. *)
+  (** Coq >= 8.7 *)
+  congr (_ * _); apply: eq_bigl => i.
+  by rewrite liftK eq_sym eqxx neq_lift ?andbT.
+by move=> i; case: unliftP => [k ->|->]; rewrite ?eqxx ?andbF.
+Qed.
 
 Lemma big_enum_val_cond (I : finType) (A : pred I) (P : pred I) F :
   \big[op/idx]_(x in A | P x) F x =
@@ -1544,14 +1568,26 @@ do 2!rewrite (big_addn _ _ 0) big_mkord; rewrite (reindex_inj rev_ord_inj) /=.
 by apply: eq_big => [i | i _]; rewrite /= -addSn subnDr addnC addnBA.
 Qed.
 
+Lemma sig_big_dep (I : finType) (J : I -> finType)
+    (P : pred I) (Q : forall {i}, pred (J i)) (F : forall {i}, J i -> R) :
+  \big[op/idx]_(i | P i) \big[op/idx]_(j : J i | Q j) F j =
+  \big[op/idx]_(p : {i : I & J i} | P (tag p) && Q (tagged p)) F (tagged p).
+Proof.
+pose s := [seq Tagged J j | i <- index_enum I, j <- index_enum (J i)].
+rewrite [LHS]big_mkcond big_mkcondl [RHS]big_mkcond -[RHS](@perm_big _ s).
+  rewrite big_allpairs_dep/=; apply: eq_bigr => i _; rewrite -big_mkcond/=.
+  by case: P; rewrite // big1.
+rewrite uniq_perm ?index_enum_uniq//.
+  by rewrite allpairs_uniq_dep// => [|i|[i j] []]; rewrite ?index_enum_uniq.
+by move=> [i j]; rewrite ?mem_index_enum; apply/allpairsPdep; exists i, j.
+Qed.
+
 Lemma pair_big_dep (I J : finType) (P : pred I) (Q : I -> pred J) F :
   \big[*%M/1]_(i | P i) \big[*%M/1]_(j | Q i j) F i j =
     \big[*%M/1]_(p | P p.1 && Q p.1 p.2) F p.1 p.2.
 Proof.
-rewrite (partition_big (fun p => p.1) P) => [|j]; last by case/andP.
-apply: eq_bigr => i /= Pi; rewrite (reindex_onto (pair i) (fun p => p.2)).
-   by apply: eq_bigl => j; rewrite !eqxx [P i]Pi !andbT.
-by case=> i' j /=; case/andP=> _ /=; move/eqP->.
+rewrite sig_big_dep; apply: (reindex (fun x => Tagged (fun=> J) x.2)).
+by exists (fun x => (projT1 x, projT2 x)) => -[].
 Qed.
 
 Lemma pair_big (I J : finType) (P : pred I) (Q : pred J) F :
@@ -1652,7 +1688,9 @@ Arguments bigID [R idx op I r].
 Arguments bigU [R idx op I].
 Arguments bigD1 [R idx op I] j [P F].
 Arguments bigD1_seq [R idx op I r] j [F].
+Arguments bigD1_ord [R idx op n] j [P F].
 Arguments partition_big [R idx op I J P] p Q [F].
+Arguments reindex_omap [R idx op I J] h h' [P F].
 Arguments reindex_onto [R idx op I J] h h' [P F].
 Arguments reindex [R idx op I J] h [P F].
 Arguments reindex_inj [R idx op I h P F].
@@ -1660,6 +1698,7 @@ Arguments big_enum_val_cond [R idx op I A] P F.
 Arguments big_enum_rank_cond [R idx op I A x] xA P F.
 Arguments big_enum_val [R idx op I A] F.
 Arguments big_enum_rank [R idx op I A x] xA F.
+Arguments sig_big_dep [R idx op I J].
 Arguments pair_big_dep [R idx op I J].
 Arguments pair_big [R idx op I J].
 Arguments big_allpairs_dep {R idx op I1 I2 J h r1 r2 F}.
@@ -1744,7 +1783,7 @@ Proof.
 have [j _ | J0] := pickP J; first by rewrite (big_distr_big_dep j).
 have Q0 i: Q i =i pred0 by move=> /J0/esym/notF[].
 transitivity (iter #|I| ( *%M 0) 1).
-  by rewrite -big_const; apply/eq_bigr=> i; have /(big_pred0 _)-> := Q0 i.  
+  by rewrite -big_const; apply/eq_bigr=> i; have /(big_pred0 _)-> := Q0 i.
 have [i _ | I0] := pickP I.
   rewrite (cardD1 i) //= mul0m big_pred0 // => f.
   by apply/familyP=> /(_ i); rewrite Q0.
@@ -1831,7 +1870,7 @@ Lemma prod_nat_const n : \prod_(i in A) n = n ^ #|A|.
 Proof. by rewrite big_const -Monoid.iteropE. Qed.
 
 Lemma sum_nat_const_nat n1 n2 n : \sum_(n1 <= i < n2) n = (n2 - n1) * n.
-Proof. by rewrite big_const_nat; elim: (_ - _) => //= ? ->. Qed.
+Proof. by rewrite big_const_nat iter_addn_0 mulnC. Qed.
 
 Lemma prod_nat_const_nat n1 n2 n : \prod_(n1 <= i < n2) n = n ^ (n2 - n1).
 Proof. by rewrite big_const_nat -Monoid.iteropE. Qed.
@@ -1890,7 +1929,7 @@ Arguments bigmax_sup [I] i0 [P m F].
 Lemma bigmax_eq_arg (I : finType) i0 (P : pred I) F :
   P i0 -> \max_(i | P i) F i = F [arg max_(i > i0 | P i) F i].
 Proof.
-move=> Pi0; case: arg_maxP => //= i Pi maxFi.
+move=> Pi0; case: arg_maxnP => //= i Pi maxFi.
 by apply/eqP; rewrite eqn_leq leq_bigmax_cond // andbT; apply/bigmax_leqP.
 Qed.
 Arguments bigmax_eq_arg [I] i0 [P F].
@@ -1899,7 +1938,7 @@ Lemma eq_bigmax_cond (I : finType) (A : pred I) F :
   #|A| > 0 -> {i0 | i0 \in A & \max_(i in A) F i = F i0}.
 Proof.
 case: (pickP A) => [i0 Ai0 _ | ]; last by move/eq_card0->.
-by exists [arg max_(i > i0 in A) F i]; [case: arg_maxP | apply: bigmax_eq_arg].
+by exists [arg max_(i > i0 in A) F i]; [case: arg_maxnP | apply: bigmax_eq_arg].
 Qed.
 
 Lemma eq_bigmax (I : finType) F : #|I| > 0 -> {i0 : I | \max_i F i = F i0}.
@@ -1940,3 +1979,11 @@ Arguments biggcdn_inf [I] i0 [P F m].
 Notation filter_index_enum :=
   ((fun _ => @deprecated_filter_index_enum _)
      (deprecate filter_index_enum big_enumP)) (only parsing).
+
+Notation big_rmcond :=
+  ((fun _ _ _ _ => @big_rmcond_in _ _ _ _)
+     (deprecate big_rmcond big_rmcond_in)) (only parsing).
+
+Notation big_uncond_in :=
+  ((fun _ _ _ _ => @big_rmcond_in _ _ _ _)
+     (deprecate big_uncond_in big_rmcond_in)) (only parsing).

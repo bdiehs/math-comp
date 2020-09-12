@@ -352,6 +352,9 @@ case: (pickP (mem A)) => [x Ax | A0]; [by right; exists x | left].
 by apply/setP=> x; rewrite inE; apply: A0.
 Qed.
 
+Lemma set_enum A : [set x | x \in enum A] = A.
+Proof. by apply/setP => x; rewrite inE mem_enum. Qed.
+
 Lemma enum_set0 : enum set0 = [::] :> seq T.
 Proof. by rewrite (eq_enum (in_set _)) enum0. Qed.
 
@@ -636,6 +639,9 @@ Proof. by apply/setP=> x; rewrite !inE. Qed.
 Lemma setCT : ~: [set: T] = set0.
 Proof. by rewrite -setC0 setCK. Qed.
 
+Lemma properC A B : (~: B \proper ~: A) = (A \proper B).
+Proof. by rewrite !properE !setCS. Qed.
+
 (* difference *)
 
 Lemma setDP A B x : reflect (x \in A /\ x \notin B) (x \in A :\: B).
@@ -817,11 +823,26 @@ Proof. by rewrite setDE subsetIr. Qed.
 Lemma sub1set A x : ([set x] \subset A) = (x \in A).
 Proof. by rewrite -subset_pred1; apply: eq_subset=> y; rewrite !inE. Qed.
 
+Variant cards_eq_spec A : seq T -> {set T} -> nat -> Type :=
+| CardEq (s : seq T) & uniq s : cards_eq_spec A s [set x | x \in s] (size s).
+
+Lemma cards_eqP A : cards_eq_spec A (enum A) A #|A|.
+Proof.
+by move: (enum A) (cardE A) (set_enum A) (enum_uniq A) => s -> <-; constructor.
+Qed.
+
 Lemma cards1P A : reflect (exists x, A = [set x]) (#|A| == 1).
 Proof.
 apply: (iffP idP) => [|[x ->]]; last by rewrite cards1.
-rewrite eq_sym eqn_leq card_gt0 => /andP[/set0Pn[x Ax] leA1].
-by exists x; apply/eqP; rewrite eq_sym eqEcard sub1set Ax cards1 leA1.
+by have [[|x []]// _] := cards_eqP; exists x; apply/setP => y; rewrite !inE.
+Qed.
+
+Lemma cards2P A : reflect (exists x y : T, x != y /\ A = [set x; y])
+                          (#|A| == 2).
+Proof.
+apply: (iffP idP) => [|[x] [y] [xy ->]]; last by rewrite cards2 xy.
+have [[|x [|y []]]//=] := cards_eqP; rewrite !inE andbT => neq_xy.
+by exists x, y; split=> //; apply/setP => z; rewrite !inE.
 Qed.
 
 Lemma subset1 A x : (A \subset [set x]) = (A == [set x]) || (A == set0).
@@ -900,7 +921,7 @@ Lemma subDset A B C : (A :\: B \subset C) = (A \subset B :|: C).
 Proof.
 apply/subsetP/subsetP=> sABC x; rewrite !inE.
   by case Bx: (x \in B) => // Ax; rewrite sABC ?inE ?Bx.
-by case Bx: (x \in B) => //; move/sABC; rewrite inE Bx.
+by case Bx: (x \in B) => // /sABC; rewrite inE Bx.
 Qed.
 
 Lemma subsetDP A B C :
@@ -963,6 +984,12 @@ Qed.
 
 Lemma properD A B C : (A \proper B :\: C) -> (A \proper B) && [disjoint A & C].
 Proof. by rewrite setDE disjoints_subset => /properI/andP[-> /proper_sub]. Qed.
+
+Lemma properCr A B : (A \proper ~: B) = (B \proper ~: A).
+Proof. by rewrite -properC setCK. Qed.
+
+Lemma properCl A B : (~: A \proper B) = (~: B \proper A).
+Proof. by rewrite -properC setCK. Qed.
 
 End setOps.
 
@@ -1426,17 +1453,13 @@ Lemma big_imset h (A : {pred I}) G : {in A &, injective h} ->
   \big[aop/idx]_(j in h @: A) G j = \big[aop/idx]_(i in A) G (h i).
 Proof.
 move=> injh; pose hA := mem (image h A).
-have [x0 Ax0 | A0] := pickP A; last first.
-  by rewrite !big_pred0 // => x; apply/imsetP=> [[i]]; rewrite unfold_in A0.
 rewrite (eq_bigl hA) => [|j]; last exact/imsetP/imageP.
-pose h' j := if insub j : {? j | hA j} is Some u then iinv (svalP u) else x0.
-rewrite (reindex_onto h h') => [|j hAj]; rewrite {}/h'; last first.
-  by rewrite (insubT hA hAj) f_iinv.
-apply: eq_bigl => i; case: insubP => [u -> /= def_u | nhAhi].
-  set i' := iinv _; have Ai' : i' \in A := mem_iinv (svalP u).
-  by apply/eqP/idP=> [<- // | Ai]; apply: injh; rewrite ?f_iinv.
-symmetry; rewrite (negbTE nhAhi); apply/idP=> Ai.
-by case/imageP: nhAhi; exists i.
+pose h' := omap (fun u : {j | hA j} => iinv (svalP u)) \o insub.
+rewrite (reindex_omap h h') => [|j hAj]; rewrite {}/h'/= ?insubT/= ?f_iinv//.
+apply: eq_bigl => i; case: insubP => [u -> /= def_u | nhAhi]; last first.
+  by apply/andP/idP => [[]//| Ai]; case/imageP: nhAhi; exists i.
+set i' := iinv _; have Ai' : i' \in A := mem_iinv (svalP u).
+by apply/eqP/idP => [[<-] // | Ai]; congr Some; apply: injh; rewrite ?f_iinv.
 Qed.
 
 Lemma big_imset_cond h (A : {pred I}) (P : pred J) G : {in A &, injective h} ->
